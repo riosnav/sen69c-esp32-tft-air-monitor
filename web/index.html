@@ -169,15 +169,15 @@ const $ = (selector, root = document) => root.querySelector(selector);
 
 const METRICS = [
   { id: 'co2', label: 'CO₂', unit: 'ppm', dec: 0 },
+  { id: 'pm1', label: 'PM1', unit: 'µg/m³', dec: 1 },
   { id: 'pm25', label: 'PM2.5', unit: 'µg/m³', dec: 1 },
+  { id: 'pm4', label: 'PM4', unit: 'µg/m³', dec: 1 },
   { id: 'pm10', label: 'PM10', unit: 'µg/m³', dec: 1 },
   { id: 'hcho', label: 'Formaldehyde', unit: 'ppb', dec: 1 },
   { id: 'voc', label: 'VOC index', unit: '', dec: 0 },
   { id: 'nox', label: 'NOₓ index', unit: '', dec: 0 },
   { id: 'temp', label: 'Temperature', unit: '°C', dec: 1 },
   { id: 'rh', label: 'Humidity', unit: '%', dec: 0 },
-  { id: 'pm1', label: 'PM1', unit: 'µg/m³', dec: 1 },
-  { id: 'pm4', label: 'PM4', unit: 'µg/m³', dec: 1 },
 ];
 const LEVELS = { good: 'GOOD', warning: 'FAIR', alarm: 'POOR', unknown: '…' };
 // Smallest span the chart zooms into, so sensor noise doesn't look like a trend.

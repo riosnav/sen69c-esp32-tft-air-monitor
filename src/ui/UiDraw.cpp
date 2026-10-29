@@ -153,8 +153,8 @@ Verdict comfortVerdict(const aq::AirQuality& aq, const aq::Measurement& m) {
 }  // namespace
 
 const std::array<Metric, 10> Ui::kTrendMetrics = {
-    Metric::Co2,  Metric::Pm25,        Metric::Pm10,     Metric::Hcho, Metric::Voc,
-    Metric::Nox,  Metric::Temperature, Metric::Humidity, Metric::Pm1,  Metric::Pm4,
+    Metric::Co2,  Metric::Pm1, Metric::Pm25, Metric::Pm4,         Metric::Pm10,
+    Metric::Hcho, Metric::Voc, Metric::Nox,  Metric::Temperature, Metric::Humidity,
 };
 
 void Ui::draw(uint32_t nowMs) {
