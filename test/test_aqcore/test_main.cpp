@@ -1,0 +1,175 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// Unit tests for the hardware-independent logic in lib/aqcore.
+// Run on the board with `pio test`.
+
+#include <AirQuality.h>
+#include <ButtonLogic.h>
+#include <Comfort.h>
+#include <History.h>
+#include <unity.h>
+
+#include <memory>
+
+using namespace aq;
+
+void setUp() {}
+void tearDown() {}
+
+static void test_level_unknown_for_nan() {
+  TEST_ASSERT_EQUAL(Level::Unknown, evaluate(NAN, defaultThresholds(Metric::Co2), Level::Good));
+}
+
+static void test_level_high_side_with_hysteresis() {
+  const Thresholds& co2 = defaultThresholds(Metric::Co2);  // 1000 / 1500, hysteresis 50
+  TEST_ASSERT_EQUAL(Level::Good, evaluate(999, co2, Level::Good));
+  TEST_ASSERT_EQUAL(Level::Warning, evaluate(1000, co2, Level::Good));
+  TEST_ASSERT_EQUAL(Level::Alarm, evaluate(1500, co2, Level::Warning));
+  // Falling back just below a limit keeps the level until past the hysteresis.
+  TEST_ASSERT_EQUAL(Level::Alarm, evaluate(1460, co2, Level::Alarm));
+  TEST_ASSERT_EQUAL(Level::Warning, evaluate(1449, co2, Level::Alarm));
+  TEST_ASSERT_EQUAL(Level::Warning, evaluate(960, co2, Level::Warning));
+  TEST_ASSERT_EQUAL(Level::Good, evaluate(950, co2, Level::Warning));
+  // Rising doesn't use hysteresis.
+  TEST_ASSERT_EQUAL(Level::Good, evaluate(990, co2, Level::Good));
+}
+
+static void test_level_two_sided() {
+  const Thresholds& rh = defaultThresholds(Metric::Humidity);  // 20/30 .. 60/70, hysteresis 2
+  TEST_ASSERT_EQUAL(Level::Alarm, evaluate(19, rh, Level::Good));
+  TEST_ASSERT_EQUAL(Level::Warning, evaluate(25, rh, Level::Good));
+  TEST_ASSERT_EQUAL(Level::Good, evaluate(45, rh, Level::Good));
+  TEST_ASSERT_EQUAL(Level::Warning, evaluate(65, rh, Level::Good));
+  TEST_ASSERT_EQUAL(Level::Alarm, evaluate(70, rh, Level::Good));
+  // Each side has its own hysteresis band.
+  TEST_ASSERT_EQUAL(Level::Warning, evaluate(31, rh, Level::Warning));
+  TEST_ASSERT_EQUAL(Level::Good, evaluate(32, rh, Level::Warning));
+  TEST_ASSERT_EQUAL(Level::Warning, evaluate(59, rh, Level::Warning));
+  TEST_ASSERT_EQUAL(Level::Good, evaluate(58, rh, Level::Warning));
+  TEST_ASSERT_EQUAL(Level::Alarm, evaluate(21, rh, Level::Alarm));
+  TEST_ASSERT_EQUAL(Level::Warning, evaluate(22, rh, Level::Alarm));
+}
+
+static void test_overall_is_worst_and_ties_follow_priority() {
+  AirQuality aq;
+  Measurement m;
+  aq.update(m);
+  TEST_ASSERT_EQUAL(Level::Unknown, aq.overall());
+
+  m[Metric::Co2] = 600;
+  m[Metric::Pm25] = 20;  // warning
+  m[Metric::Pm1] = 500;  // no limits: never drives the overall level
+  aq.update(m);
+  TEST_ASSERT_EQUAL(Level::Warning, aq.overall());
+  TEST_ASSERT_EQUAL(Metric::Pm25, aq.worst());
+  TEST_ASSERT_EQUAL(Level::Good, aq.level(Metric::Pm1));
+
+  m[Metric::Co2] = 1100;  // also a warning; CO2 has priority over PM2.5
+  aq.update(m);
+  TEST_ASSERT_EQUAL(Metric::Co2, aq.worst());
+
+  m[Metric::Hcho] = 90;  // alarm beats warnings
+  aq.update(m);
+  TEST_ASSERT_EQUAL(Level::Alarm, aq.overall());
+  TEST_ASSERT_EQUAL(Metric::Hcho, aq.worst());
+}
+
+static void test_ring_keeps_newest_in_order() {
+  Ring<3> r;
+  TEST_ASSERT_EQUAL(0, r.size());
+  for (int i = 1; i <= 5; ++i) r.push(static_cast<float>(i));
+  TEST_ASSERT_EQUAL(3, r.size());
+  TEST_ASSERT_EQUAL_FLOAT(3, r[0]);
+  TEST_ASSERT_EQUAL_FLOAT(5, r[2]);
+}
+
+static void test_history_averages_and_records_gaps() {
+  auto h = std::make_unique<MetricHistory>();
+  Measurement m;
+  uint32_t t = 1000;
+  for (int i = 0; i < 10; ++i, t += 1000) {
+    m[Metric::Co2] = 400.0f + i;  // mean 404.5 over the first 10 s
+    h->update(&m, t);
+  }
+  h->update(nullptr, t);  // closes the first 10 s period
+  const auto& fine = h->fine(Metric::Co2);
+  TEST_ASSERT_EQUAL(1, fine.size());
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 404.5f, fine[0]);
+  TEST_ASSERT_TRUE(std::isnan(h->fine(Metric::Hcho)[0]));
+
+  t += 25000;  // no data for 25 s: two empty periods
+  h->update(nullptr, t);
+  TEST_ASSERT_EQUAL(3, fine.size());
+  TEST_ASSERT_TRUE(std::isnan(fine[1]));
+  TEST_ASSERT_TRUE(std::isnan(fine[2]));
+}
+
+static void test_button_click_long_press_and_repeat() {
+  ButtonLogic b;
+  uint32_t t = 0;
+  TEST_ASSERT_EQUAL(ButtonEvent::None, b.update(true, t));
+  TEST_ASSERT_EQUAL(ButtonEvent::None, b.update(false, t += 10));  // bounce
+  TEST_ASSERT_EQUAL(ButtonEvent::None, b.update(true, t += 5));
+  TEST_ASSERT_EQUAL(ButtonEvent::Press, b.update(true, t += 30));
+  TEST_ASSERT_EQUAL(ButtonEvent::None, b.update(false, t += 100));
+  TEST_ASSERT_EQUAL(ButtonEvent::Click, b.update(false, t += 30));
+
+  TEST_ASSERT_EQUAL(ButtonEvent::None, b.update(true, t += 1000));
+  TEST_ASSERT_EQUAL(ButtonEvent::Press, b.update(true, t += 30));
+  TEST_ASSERT_EQUAL(ButtonEvent::LongPress, b.update(true, t += ButtonLogic::kLongPressMs));
+  TEST_ASSERT_EQUAL(ButtonEvent::Repeat, b.update(true, t += ButtonLogic::kRepeatMs));
+  b.update(false, t += 10);
+  // A long press doesn't also produce a click on release.
+  TEST_ASSERT_EQUAL(ButtonEvent::None, b.update(false, t += 30));
+}
+
+static void test_button_swallow_suppresses_rest_of_press() {
+  ButtonLogic b;
+  uint32_t t = 0;
+  b.update(true, t);
+  TEST_ASSERT_EQUAL(ButtonEvent::Press, b.update(true, t += 30));
+  b.swallow();
+  TEST_ASSERT_EQUAL(ButtonEvent::None, b.update(true, t += 2000));
+  b.update(false, t += 10);
+  TEST_ASSERT_EQUAL(ButtonEvent::None, b.update(false, t += 30));
+  // The next press works normally again.
+  b.update(true, t += 100);
+  b.update(true, t += 30);
+  b.update(false, t += 50);
+  TEST_ASSERT_EQUAL(ButtonEvent::Click, b.update(false, t += 30));
+}
+
+static void test_comfort_values() {
+  TEST_ASSERT_FLOAT_WITHIN(0.1f, 13.9f, dewPoint(25, 50));
+  TEST_ASSERT_FLOAT_WITHIN(0.1f, 11.5f, absoluteHumidity(25, 50));
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 77.0f, toFahrenheit(25));
+  TEST_ASSERT_TRUE(std::isnan(dewPoint(NAN, 50)));
+}
+
+static int runTests() {
+  UNITY_BEGIN();
+  RUN_TEST(test_level_unknown_for_nan);
+  RUN_TEST(test_level_high_side_with_hysteresis);
+  RUN_TEST(test_level_two_sided);
+  RUN_TEST(test_overall_is_worst_and_ties_follow_priority);
+  RUN_TEST(test_ring_keeps_newest_in_order);
+  RUN_TEST(test_history_averages_and_records_gaps);
+  RUN_TEST(test_button_click_long_press_and_repeat);
+  RUN_TEST(test_button_swallow_suppresses_rest_of_press);
+  RUN_TEST(test_comfort_values);
+  return UNITY_END();
+}
+
+#ifdef ARDUINO
+#include <Arduino.h>
+void setup() {
+  // With native USB the port only appears after the board has rebooted, so
+  // wait for the test runner to open it before printing anything.
+  for (uint32_t start = millis(); !Serial && millis() - start < 15000;) delay(10);
+  delay(500);
+  runTests();
+}
+void loop() {}
+#else
+int main() { return runTests(); }
+#endif

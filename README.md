@@ -5,15 +5,49 @@ Firmware for a small indoor air-quality monitor built from an
 a [Sensirion SEN69C](https://sensirion.com/products/catalog/SEN69C) environmental sensor and the
 [Adafruit SEN6x breakout](https://learn.adafruit.com/adafruit-sen6x-breakout).
 
-> **Status:** early development (milestone M0, hardware bring-up). Nothing below "Planned" works yet.
+> **Status:** early development (milestone M1: standalone device). Networking is not implemented yet.
 
-## Planned features
+## Features
 
-- Shows PM1/2.5/4/10, CO₂, formaldehyde (HCHO), VOC and NOx indices, temperature and humidity on the built-in 240×135 screen, with warnings when a value leaves the healthy range.
-- Three-button interface: several screens, trend graphs and a settings menu.
-- Wi-Fi setup from a phone (QR code on screen → setup page), no reflashing; remembers several networks.
-- Home Assistant integration through MQTT auto-discovery.
-- Works fully offline: display and alarms never depend on the network.
+- Shows PM1/2.5/4/10, CO₂, formaldehyde (HCHO), VOC and NOx indices, temperature and humidity on the built-in 240×135 screen.
+- Colour-coded levels and a pop-up alert (which also wakes the screen) when a value leaves the healthy range; the NeoPixel shows the overall air quality.
+- Trend graphs of the last hour and the last 24 hours for every value.
+- Settings menu: brightness, auto-dim, °C/°F, status LED, temperature offset, altitude, CO₂ self-calibration, fan cleaning, CO₂ recalibration, restart, factory reset. Settings survive restarts.
+- Works fully offline.
+
+Planned: Wi-Fi setup from a phone (QR code on screen → setup page) without reflashing, a local web dashboard, and Home Assistant integration through MQTT auto-discovery.
+
+## Using it
+
+Hold the monitor with the buttons on the left: **D0** at the top, **D1** in the middle, **D2** at the bottom.
+Small symbols next to each button show what it does on the current screen.
+
+| | D0 | D1 | D2 |
+|---|---|---|---|
+| Pages | previous page | page action (trend pages: next value) · **hold**: settings | next page |
+| Settings | up | select · **hold**: close | down |
+| Changing a value | increase (hold to repeat) | done | decrease (hold to repeat) |
+| Alert | dismiss | dismiss | dismiss |
+
+Pages: overview, particles, gases, comfort, trend (1 h), trend (24 h), device information.
+When the screen is dimmed, the first press only wakes it.
+
+### Default limits
+
+| Value | Warning | Alarm | Basis |
+|---|---|---|---|
+| CO₂ | 1000 ppm | 1500 ppm | Common ventilation guidance |
+| PM2.5 | 15 µg/m³ | 35 µg/m³ | WHO 2021 24-hour guideline / US EPA 24-hour standard |
+| PM10 | 45 µg/m³ | 150 µg/m³ | WHO 2021 24-hour guideline / US EPA 24-hour standard |
+| Formaldehyde | 40 ppb | 80 ppb | ~WELL building standard / WHO 30-minute guideline (0.1 mg/m³) |
+| VOC index | 150 | 250 | Sensirion index: 100 is the sensor's learned typical air |
+| NOx index | 20 | 150 | Sensirion index: 1 is the sensor's learned typical air |
+| Temperature | below 18 or above 26 °C | below 16 or above 30 °C | Comfort range |
+| Humidity | below 30 or above 60 % | below 20 or above 70 % | Comfort range; above 70 % mould risk |
+
+A level only drops back once the value is a little inside the limit again, so readings near a limit don't flicker.
+The sensor's readings are only meaningful once warmed up: formaldehyde needs about 10 minutes, and the VOC and NOx
+indices learn the room's typical air over the first hours.
 
 ## Hardware
 
@@ -51,6 +85,17 @@ pio device monitor      # serial output (115200 baud)
 - If no port appears, put the board in ROM bootloader mode: hold **D0**, tap **Reset**, release **D0**.
 - After flashing, press **Reset** if the new firmware doesn't start on its own.
 - Flashing replaces the board's factory UF2 bootloader/CircuitPython. Adafruit's guide explains how to restore it.
+
+### Running the tests
+
+The hardware-independent logic (`lib/aqcore`: limits, history, buttons, comfort maths) has Unity tests that run on
+the board. With native USB the serial port disappears while the board restarts, so upload and test in two steps:
+
+```sh
+pio test --without-testing      # build and flash the test firmware
+pio test --without-uploading    # read the results (within 15 s)
+pio run -t upload               # put the normal firmware back
+```
 
 ### Optional local settings
 
