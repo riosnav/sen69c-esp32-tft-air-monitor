@@ -2,6 +2,9 @@
 .pio/
 platformio_override.ini
 
+# Generated from web/ at build time
+src/web/WebAssets.h
+
 # VS Code (keep only the shared extension recommendations)
 .vscode/*
 !.vscode/extensions.json

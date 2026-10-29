@@ -21,3 +21,9 @@ inline int drawRichRight(LGFX_Sprite& s, const char* text, int right, int baseli
                          uint16_t color) {
   return drawRich(s, text, right - richWidth(s, text), baseline, color);
 }
+
+// Draws `text` as it is, without the markup: for names people type, such as
+// Wi-Fi networks. Longer than `maxWidth` pixels, it's cut short with "...".
+// Returns the width.
+int drawPlain(LGFX_Sprite& s, const char* text, int x, int baseline, uint16_t color,
+              int maxWidth = 240);

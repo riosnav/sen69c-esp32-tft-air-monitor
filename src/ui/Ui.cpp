@@ -16,7 +16,6 @@ constexpr uint8_t kDimmedBrightness = 4;  // of 255
 constexpr uint32_t kDrawIntervalMs = 250;
 constexpr uint32_t kToastMs = 4000;
 constexpr uint16_t kOutdoorCo2Ppm = 420;
-constexpr uint16_t kDimOptionsS[] = {0, 30, 60, 120, 300, 900};
 
 template <typename E>
 E stepEnum(E value, int delta, E count) {
@@ -29,11 +28,13 @@ uint8_t backlight(uint8_t percent) { return static_cast<uint8_t>(percent * 255 /
 }  // namespace
 
 void Ui::begin(SensorService& sensor, Settings& settings, const aq::AirQuality& airQuality,
-               const aq::MetricHistory& history) {
+               const aq::MetricHistory& history, WifiService& wifi, const Ota& ota) {
   sensor_ = &sensor;
   settings_ = &settings;
   aq_ = &airQuality;
   history_ = &history;
+  wifi_ = &wifi;
+  ota_ = &ota;
 
   for (size_t i = 0; i < 3; ++i) {
     pinMode(kButtonPins[i], kPressedLevel[i] == LOW ? INPUT_PULLUP : INPUT_PULLDOWN);
@@ -48,6 +49,12 @@ void Ui::begin(SensorService& sensor, Settings& settings, const aq::AirQuality& 
 
 void Ui::update(const SensorSnapshot& snapshot, uint32_t nowMs) {
   snapshot_ = snapshot;
+  if (settingsChanged_) {
+    settingsChanged_ = false;
+    if (!dimmed_) tft_.setBrightness(backlight(settings_->brightness));
+    commitSettings();
+    dirty_ = true;
+  }
   if (snapshot.resultSequence != resultSequence_) {
     resultSequence_ = snapshot.resultSequence;
     showToast(snapshot.result, nowMs);
@@ -80,6 +87,12 @@ void Ui::handleButton(size_t button, aq::ButtonEvent event, uint32_t nowMs) {
     return;
   }
   dirty_ = true;
+  if (ota_->active() || ota_->succeeded()) return;  // nothing to do but wait
+  if (wifi_->setupActive()) {
+    // D1 cancels the setup, or closes it once it has worked.
+    if (button == 1 && event == ButtonEvent::Click) wifi_->stopSetup();
+    return;
+  }
   if (alertVisible_) {
     if (event == ButtonEvent::Click) {
       acknowledged_[aq::idx(alertMetric_)] = alertLevel_;
@@ -100,6 +113,9 @@ void Ui::handleButton(size_t button, aq::ButtonEvent event, uint32_t nowMs) {
     case Mode::Confirm:
       onConfirmEvent(button, event);
       break;
+    case Mode::Link:
+      if (event == ButtonEvent::Click) mode_ = Mode::Pages;
+      break;
   }
 }
 
@@ -118,6 +134,20 @@ void Ui::onPageEvent(size_t button, aq::ButtonEvent event) {
     page_ = stepEnum(page_, +1, Page::Count);
   } else if (page_ == Page::TrendHour || page_ == Page::TrendDay) {
     trendMetric_ = (trendMetric_ + 1) % kTrendMetrics.size();
+  } else if (page_ == Page::Network) {
+    onNetworkAction();
+  }
+}
+
+// D1 on the Wi-Fi page takes the obvious next step.
+void Ui::onNetworkAction() {
+  if (!settings_->wifiEnabled && wifi_->saved().size() > 0) {
+    settings_->wifiEnabled = true;
+    commitSettings();
+  } else if (wifi_->state() == WifiState::Connected) {
+    mode_ = Mode::Link;  // QR code of the web page
+  } else {
+    wifi_->startSetup();
   }
 }
 
@@ -169,12 +199,19 @@ void Ui::select(Item item) {
     case Item::DimAfter:
     case Item::Units:
     case Item::Led:
+    case Item::Wifi:
     case Item::Co2SelfCalibration:
       adjust(item, +1);
       commitSettings();
       break;
+    case Item::WifiSetup:
+      mode_ = Mode::Pages;
+      page_ = Page::Network;  // where the result shows once the setup ends
+      wifi_->startSetup();
+      break;
     case Item::CleanFan:
     case Item::CalibrateCo2:
+    case Item::ForgetWifi:
     case Item::Restart:
     case Item::FactoryReset:
       confirmItem_ = item;
@@ -207,6 +244,9 @@ void Ui::adjust(Item item, int direction) {
     case Item::Led:
       s.led = static_cast<LedMode>((static_cast<int>(s.led) + direction + 3) % 3);
       break;
+    case Item::Wifi:
+      s.wifiEnabled = !s.wifiEnabled;
+      break;
     case Item::TempOffset:
       s.tempOffsetC = std::clamp(std::round(s.tempOffsetC * 10 + direction) / 10, -10.0f, 10.0f);
       break;
@@ -233,11 +273,16 @@ void Ui::execute(Item item) {
     case Item::CalibrateCo2:
       sensor_->recalibrateCo2(kOutdoorCo2Ppm);
       break;
+    case Item::ForgetWifi:
+      wifi_->forgetAll();
+      showToast("Wi-Fi networks forgotten", millis());
+      break;
     case Item::Restart:
       ESP.restart();
       break;
     case Item::FactoryReset:
       settings::erase();
+      wifi_->forgetAll();
       ESP.restart();
       break;
     default:
@@ -280,8 +325,10 @@ void Ui::updateAlerts(uint32_t nowMs) {
 }
 
 void Ui::updateBacklight(uint32_t nowMs) {
-  const bool dim = settings_->dimAfterS != 0 && mode_ == Mode::Pages && !alertVisible_ &&
-                   nowMs - lastInputMs_ >= settings_->dimAfterS * 1000UL;
+  // Screens that show something to scan or wait for stay bright.
+  const bool fullScreen = wifi_->setupActive() || ota_->active() || ota_->succeeded();
+  const bool dim = settings_->dimAfterS != 0 && mode_ == Mode::Pages && !fullScreen &&
+                   !alertVisible_ && nowMs - lastInputMs_ >= settings_->dimAfterS * 1000UL;
   if (dim == dimmed_) return;
   dimmed_ = dim;
   tft_.setBrightness(dim ? kDimmedBrightness : backlight(settings_->brightness));

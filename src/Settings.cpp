@@ -4,24 +4,38 @@
 
 #include <Preferences.h>
 
+#include "Device.h"
+
 namespace settings {
 
 namespace {
 constexpr const char* kNamespace = "settings";
-}
+constexpr size_t kWebPasswordLength = 8;
+}  // namespace
 
 Settings load() {
   Settings s;
   Preferences p;
-  if (!p.begin(kNamespace, true)) return s;  // nothing saved yet
-  s.brightness = p.getUChar("bright", s.brightness);
-  s.dimAfterS = p.getUShort("dim", s.dimAfterS);
-  s.fahrenheit = p.getBool("degF", s.fahrenheit);
-  s.led = static_cast<LedMode>(p.getUChar("led", static_cast<uint8_t>(s.led)));
-  s.tempOffsetC = p.getFloat("tOffset", s.tempOffsetC);
-  s.altitudeM = p.getUShort("alt", s.altitudeM);
-  s.co2SelfCalibration = p.getBool("co2Asc", s.co2SelfCalibration);
-  p.end();
+  bool hasPassword = false;
+  if (p.begin(kNamespace, true)) {
+    s.brightness = p.getUChar("bright", s.brightness);
+    s.dimAfterS = p.getUShort("dim", s.dimAfterS);
+    s.fahrenheit = p.getBool("degF", s.fahrenheit);
+    s.led = static_cast<LedMode>(p.getUChar("led", static_cast<uint8_t>(s.led)));
+    s.tempOffsetC = p.getFloat("tOffset", s.tempOffsetC);
+    s.altitudeM = p.getUShort("alt", s.altitudeM);
+    s.co2SelfCalibration = p.getBool("co2Asc", s.co2SelfCalibration);
+    s.wifiEnabled = p.getBool("wifi", s.wifiEnabled);
+    if (p.isKey("name")) p.getString("name", s.name, sizeof s.name);
+    hasPassword = p.isKey("webPass");
+    if (hasPassword) p.getString("webPass", s.webPassword, sizeof s.webPassword);
+    p.end();
+  }
+  if (!hasPassword) {
+    // First start, or after a factory reset.
+    device::randomPassword(s.webPassword, kWebPasswordLength);
+    save(s);
+  }
   return s;
 }
 
@@ -35,6 +49,9 @@ void save(const Settings& s) {
   p.putFloat("tOffset", s.tempOffsetC);
   p.putUShort("alt", s.altitudeM);
   p.putBool("co2Asc", s.co2SelfCalibration);
+  p.putBool("wifi", s.wifiEnabled);
+  p.putString("name", s.name);
+  p.putString("webPass", s.webPassword);
   p.end();
 }
 

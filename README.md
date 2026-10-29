@@ -5,17 +5,19 @@ Firmware for a small indoor air-quality monitor built from an
 a [Sensirion SEN69C](https://sensirion.com/products/catalog/SEN69C) environmental sensor and the
 [Adafruit SEN6x breakout](https://learn.adafruit.com/adafruit-sen6x-breakout).
 
-> **Status:** early development (milestone M1: standalone device). Networking is not implemented yet.
+> **Status:** early development (milestone M2: Wi-Fi and web page). Home Assistant integration is next.
 
 ## Features
 
 - Shows PM1/2.5/4/10, CO₂, formaldehyde (HCHO), VOC and NOx indices, temperature and humidity on the built-in 240×135 screen.
 - Colour-coded levels and a pop-up alert (which also wakes the screen) when a value leaves the healthy range; the NeoPixel shows the overall air quality.
 - Trend graphs of the last hour and the last 24 hours for every value.
-- Settings menu: brightness, auto-dim, °C/°F, status LED, temperature offset, altitude, CO₂ self-calibration, fan cleaning, CO₂ recalibration, restart, factory reset. Settings survive restarts.
-- Works fully offline.
+- Settings menu: brightness, auto-dim, °C/°F, status LED, Wi-Fi, temperature offset, altitude, CO₂ self-calibration, fan cleaning, CO₂ recalibration, restart, factory reset. Settings survive restarts.
+- Wi-Fi setup from a phone, no reflashing: scan the QR code on the screen and pick your network. Up to five networks are saved; the monitor joins whichever is in range.
+- Local web page with live values, trend charts, settings, maintenance and firmware updates over Wi-Fi (with automatic rollback if an update fails).
+- Works fully offline; Wi-Fi is optional and everything stays on your network (no cloud).
 
-Planned: Wi-Fi setup from a phone (QR code on screen → setup page) without reflashing, a local web dashboard, and Home Assistant integration through MQTT auto-discovery.
+Planned: Home Assistant integration through MQTT auto-discovery.
 
 ## Using it
 
@@ -24,12 +26,15 @@ Small symbols next to each button show what it does on the current screen.
 
 | | D0 | D1 | D2 |
 |---|---|---|---|
-| Pages | previous page | page action (trend pages: next value) · **hold**: settings | next page |
+| Pages | previous page | page action (see below) · **hold**: settings | next page |
 | Settings | up | select · **hold**: close | down |
 | Changing a value | increase (hold to repeat) | done | decrease (hold to repeat) |
 | Alert | dismiss | dismiss | dismiss |
+| Wi-Fi setup screen | – | cancel, or done once connected | – |
 
-Pages: overview, particles, gases, comfort, trend (1 h), trend (24 h), device information.
+Pages: overview, particles, gases, comfort, trend (1 h), trend (24 h), Wi-Fi, device information.
+D1 on a trend page shows the next value; on the Wi-Fi page it starts Wi-Fi setup, or, once connected,
+shows a QR code that opens the web page on a phone.
 When the screen is dimmed, the first press only wakes it.
 
 ### Default limits
@@ -48,6 +53,44 @@ When the screen is dimmed, the first press only wakes it.
 A level only drops back once the value is a little inside the limit again, so readings near a limit don't flicker.
 The sensor's readings are only meaningful once warmed up: formaldehyde needs about 10 minutes, and the VOC and NOx
 indices learn the room's typical air over the first hours.
+
+### Wi-Fi and the web page
+
+1. On the Wi-Fi page press **D1** (or choose *Set up Wi-Fi* in the settings). The monitor opens a temporary
+   hotspot and shows a QR code.
+2. Scan it with your phone's camera and join the hotspot. A setup page opens; if it doesn't, the screen shows a
+   second QR code and the address to open.
+3. Pick your network and enter its password. The monitor connects, saves it, and shows its address, e.g.
+   `http://airmonitor-a1b2.local/` and its IP address.
+
+Notes:
+
+- Only 2.4 GHz networks work (an ESP32-S3 limitation).
+- Up to five networks are saved; the monitor joins the strongest one in range and keeps looking, slowly, when
+  none is. More networks can be added from the web page or by running the setup again.
+- `.local` names don't resolve on every Android phone; use the QR code on the Wi-Fi page (D1) or the IP address.
+- The setup hotspot has a random password, shown on the screen, and closes after use or after 10 minutes.
+
+The web page shows the readings, trend charts and device status to anyone on your network. Changing settings,
+maintenance and firmware updates need the **web password**, shown on the monitor's Wi-Fi page (the browser asks
+for it; any user name works). A random one is created on first start; it can be changed or removed on the web
+page, and a factory reset creates a new one. The connection is plain HTTP, as is usual for devices on a home
+network, so don't reuse a valuable password.
+
+The web page also serves a small JSON API (`/api/state`, `/api/history?metric=co2&range=hour|day`,
+`/api/settings`, ...), documented at the top of [src/net/Web.h](src/net/Web.h).
+
+### Firmware updates over Wi-Fi
+
+On the web page open *Firmware update* and upload a `firmware.bin` (not `firmware.factory.bin`), or from a
+computer:
+
+```sh
+curl -u any:WEBPASSWORD --data-binary @firmware.bin http://airmonitor-a1b2.local/api/ota
+```
+
+The monitor restarts into the new firmware, which confirms itself once it has rejoined Wi-Fi. If it crashes
+first, or can't rejoin within 5 minutes, the monitor goes back to the previous firmware.
 
 ## Hardware
 
@@ -85,11 +128,13 @@ pio device monitor      # serial output (115200 baud)
 - If no port appears, put the board in ROM bootloader mode: hold **D0**, tap **Reset**, release **D0**.
 - After flashing, press **Reset** if the new firmware doesn't start on its own.
 - Flashing replaces the board's factory UF2 bootloader/CircuitPython. Adafruit's guide explains how to restore it.
+- The web pages live in [web/](web/); a build step (`scripts/embed_web.py`) compresses them into the firmware.
 
 ### Running the tests
 
-The hardware-independent logic (`lib/aqcore`: limits, history, buttons, comfort maths) has Unity tests that run on
-the board. With native USB the serial port disappears while the board restarts, so upload and test in two steps:
+The hardware-independent logic (`lib/aqcore`: limits, history, buttons, comfort maths; `lib/netcore`: choosing
+which Wi-Fi network to join) has Unity tests that run on the board. With native USB the serial port disappears
+while the board restarts, so upload and test in two steps:
 
 ```sh
 pio test --without-testing      # build and flash the test firmware

@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Unit tests for the hardware-independent logic in lib/aqcore.
+// Unit tests for the hardware-independent logic in lib/aqcore and lib/netcore.
 // Run on the board with `pio test`.
 
 #include <AirQuality.h>
 #include <ButtonLogic.h>
 #include <Comfort.h>
 #include <History.h>
+#include <WifiChoice.h>
 #include <unity.h>
 
 #include <memory>
@@ -146,6 +147,34 @@ static void test_comfort_values() {
   TEST_ASSERT_TRUE(std::isnan(dewPoint(NAN, 50)));
 }
 
+static void test_wifi_choice_strongest_first_then_hidden() {
+  const net::SavedNetwork saved[] = {
+      {"Home", false}, {"Office", false}, {"Lab", true}, {"Cabin", false}, {"Attic", true}};
+  const net::ScanEntry scan[] = {
+      {"Neighbour", -40}, {"Office", -70}, {"Home", -80}, {"Home", -55}, {"", -60}, {"Attic", -75}};
+  net::Candidate out[5];
+  const size_t n = net::chooseNetworks(saved, 5, scan, 6, out);
+  TEST_ASSERT_EQUAL(4, n);
+  TEST_ASSERT_EQUAL(0, out[0].saved);  // Home, through its stronger access point
+  TEST_ASSERT_EQUAL(3, out[0].scanIndex);
+  TEST_ASSERT_EQUAL(1, out[1].saved);  // Office
+  TEST_ASSERT_EQUAL(4, out[2].saved);  // Attic: hidden but seen, so ranked by signal
+  TEST_ASSERT_EQUAL(5, out[2].scanIndex);
+  TEST_ASSERT_EQUAL(2, out[3].saved);  // Lab: hidden and not seen, tried last
+  TEST_ASSERT_EQUAL(-1, out[3].scanIndex);
+  // Cabin isn't in range and isn't hidden: not tried.
+}
+
+static void test_wifi_choice_ties_keep_saved_order() {
+  const net::SavedNetwork saved[] = {{"A", false}, {"B", false}};
+  const net::ScanEntry scan[] = {{"B", -60}, {"A", -60}};
+  net::Candidate out[2];
+  TEST_ASSERT_EQUAL(2, net::chooseNetworks(saved, 2, scan, 2, out));
+  TEST_ASSERT_EQUAL(0, out[0].saved);
+  TEST_ASSERT_EQUAL(1, out[1].saved);
+  TEST_ASSERT_EQUAL(0, net::chooseNetworks(saved, 2, scan, 0, out));
+}
+
 static int runTests() {
   UNITY_BEGIN();
   RUN_TEST(test_level_unknown_for_nan);
@@ -157,6 +186,8 @@ static int runTests() {
   RUN_TEST(test_button_click_long_press_and_repeat);
   RUN_TEST(test_button_swallow_suppresses_rest_of_press);
   RUN_TEST(test_comfort_values);
+  RUN_TEST(test_wifi_choice_strongest_first_then_hidden);
+  RUN_TEST(test_wifi_choice_ties_keep_saved_order);
   return UNITY_END();
 }
 

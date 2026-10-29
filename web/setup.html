@@ -1,0 +1,233 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Air Monitor Wi-Fi setup</title>
+<style>
+:root { --bg: #f3f4f6; --card: #fff; --text: #16181d; --muted: #646a73; --line: #e1e4e8; --accent: #0b7fbf; --good: #1d9a50; --alarm: #d4362b; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0e1013; --card: #171a1f; --text: #e9ebee; --muted: #9aa0a8; --line: #2a2e35; --accent: #50c8ff; --good: #3ccd6e; --alarm: #f54236; }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
+main { max-width: 480px; margin: 0 auto; padding: 20px 16px 40px; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 16px; margin: 0; flex: 1; }
+.hint { color: var(--muted); font-size: 14px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-top: 16px; }
+.row { display: flex; align-items: center; gap: 8px; }
+ul { list-style: none; padding: 0; margin: 10px 0; }
+button { font: inherit; cursor: pointer; }
+.network { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 11px 4px; background: none; border: 0; border-bottom: 1px solid var(--line); color: var(--text); text-align: left; }
+.network .ssid { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meta { display: flex; align-items: center; gap: 8px; color: var(--muted); flex-shrink: 0; }
+.signal { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; }
+.signal i { width: 4px; background: var(--line); border-radius: 1px; }
+.signal i:nth-child(1) { height: 25%; } .signal i:nth-child(2) { height: 50%; } .signal i:nth-child(3) { height: 75%; } .signal i:nth-child(4) { height: 100%; }
+.s1 i:nth-child(-n+1), .s2 i:nth-child(-n+2), .s3 i:nth-child(-n+3), .s4 i:nth-child(-n+4) { background: var(--text); }
+label { display: grid; gap: 4px; margin: 12px 0; font-size: 15px; }
+label.check { display: flex; align-items: center; gap: 8px; }
+input[type=text], input[type=password] { font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); width: 100%; }
+.primary { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 10px 18px; }
+.plain { background: none; border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 6px 12px; }
+.big { font-size: 20px; font-weight: 600; margin: 0 0 6px; }
+.ok { color: var(--good); }
+.bad { color: var(--alarm); }
+.links a { color: var(--accent); font-size: 17px; overflow-wrap: anywhere; }
+.links li { margin: 6px 0; }
+.error { color: var(--alarm); font-size: 14px; min-height: 1.4em; margin: 6px 0 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Wi-Fi setup</h1>
+  <p class="hint">Choose the network the air monitor should join.</p>
+
+  <section id="pick" class="card">
+    <div class="row"><h2>Networks</h2><button type="button" class="plain" id="rescan">Rescan</button></div>
+    <ul id="networks"><li class="hint">Looking for networks&hellip;</li></ul>
+    <button type="button" class="plain" id="other">Other network&hellip;</button>
+    <form id="join" hidden>
+      <label>Network <input type="text" id="ssid" maxlength="32" autocomplete="off" autocapitalize="none" spellcheck="false" required></label>
+      <label id="password-row">Password <input type="password" id="password" maxlength="64" autocomplete="off"></label>
+      <label class="check" id="show-row"><input type="checkbox" id="show"> Show password</label>
+      <label class="check" id="hidden-row"><input type="checkbox" id="hidden"> Hidden network</label>
+      <button class="primary">Connect</button>
+      <p id="join-error" class="error"></p>
+    </form>
+  </section>
+
+  <section id="progress" class="card" hidden>
+    <p id="status" class="big"></p>
+    <p id="detail" class="hint"></p>
+    <div id="result" hidden>
+      <ul id="links" class="links"></ul>
+      <p>Web password, for changing settings: <strong id="web-password"></strong><br>
+        <span class="hint">The monitor also shows it on its Wi-Fi page.</span></p>
+    </div>
+    <div class="row">
+      <button type="button" class="plain" id="again" hidden>Try another network</button>
+      <button type="button" class="primary" id="done" hidden>Done</button>
+    </div>
+  </section>
+</main>
+<script>
+'use strict';
+const $ = (selector) => document.querySelector(selector);
+let lostPolls = 0;
+
+async function request(path, body) {
+  const options = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {};
+  const response = await fetch(path, options);
+  const text = await response.text();
+  if (!response.ok) throw new Error(text || response.statusText);
+  return text ? JSON.parse(text) : null;
+}
+
+const bars = (rssi) => (rssi >= -55 ? 4 : rssi >= -65 ? 3 : rssi >= -75 ? 2 : 1);
+
+function showNetworks(w) {
+  const list = $('#networks');
+  if (w.networks.length === 0) {
+    const li = document.createElement('li');
+    li.className = 'hint';
+    li.textContent = w.scanning ? 'Looking for networks…' : 'No networks found.';
+    list.replaceChildren(li);
+    return;
+  }
+  list.replaceChildren(...w.networks.map((n) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'network';
+    button.innerHTML = '<span class="ssid"></span><span class="meta"><span class="lock"></span><span class="signal"><i></i><i></i><i></i><i></i></span></span>';
+    button.querySelector('.ssid').textContent = n.ssid;
+    button.querySelector('.lock').textContent = n.secure ? '\u{1F512}' : '';
+    button.querySelector('.signal').classList.add('s' + bars(n.rssi));
+    button.addEventListener('click', () => choose(n.ssid, n.secure, false));
+    const li = document.createElement('li');
+    li.append(button);
+    return li;
+  }));
+}
+
+async function refresh() {
+  try {
+    const w = await request('/api/wifi');
+    showNetworks(w);
+    if (w.scanning) setTimeout(refresh, 1500);
+  } catch (e) {
+    setTimeout(refresh, 2000);
+  }
+}
+
+function choose(ssid, secure, manual) {
+  const form = $('#join');
+  form.hidden = false;
+  $('#join-error').textContent = '';
+  $('#ssid').value = ssid;
+  $('#ssid').readOnly = !manual;
+  $('#password').value = '';
+  $('#password-row').hidden = $('#show-row').hidden = !secure;
+  $('#hidden-row').hidden = !manual;
+  (manual ? $('#ssid') : secure ? $('#password') : form.querySelector('button')).focus();
+  form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function showProgress(title, detail) {
+  $('#pick').hidden = true;
+  $('#progress').hidden = false;
+  $('#status').textContent = title;
+  $('#status').className = 'big';
+  $('#detail').textContent = detail;
+  $('#result').hidden = $('#again').hidden = $('#done').hidden = true;
+}
+
+async function waitForResult() {
+  let w;
+  try {
+    w = await request('/api/wifi');
+    lostPolls = 0;
+  } catch (e) {
+    // Joining a network on another channel moves the hotspot too; phones reconnect.
+    if (++lostPolls > 40) {
+      $('#status').textContent = 'Lost contact with the monitor';
+      $('#detail').textContent = 'Its screen shows whether it connected. If not, start the setup again there.';
+      return;
+    }
+    $('#detail').textContent = 'Reconnecting to the monitor…';
+    setTimeout(waitForResult, 1000);
+    return;
+  }
+  const setup = w.setup;
+  if (setup.state === 'succeeded') {
+    $('#status').textContent = `Connected to ${setup.ssid}`;
+    $('#status').className = 'big ok';
+    $('#detail').textContent = 'Switch your phone back to your usual Wi-Fi; the monitor is then at:';
+    $('#links').replaceChildren(...[`http://${w.host}/`, w.ip ? `http://${w.ip}/` : null].filter(Boolean).map((url) => {
+      const a = document.createElement('a');
+      a.href = a.textContent = url;
+      const li = document.createElement('li');
+      li.append(a);
+      return li;
+    }));
+    $('#web-password').textContent = w.webPassword || '(none)';
+    $('#result').hidden = false;
+    $('#done').hidden = false;
+  } else if (setup.state === 'failed') {
+    $('#status').textContent = `Couldn't connect to ${setup.ssid}`;
+    $('#status').className = 'big bad';
+    $('#detail').textContent = setup.message;
+    $('#again').hidden = false;
+  } else if (setup.state === 'off') {
+    $('#status').textContent = 'Setup has ended';
+    $('#detail').textContent = 'Start it again from the monitor if needed.';
+  } else {
+    $('#detail').textContent = 'This takes up to 20 seconds.';
+    setTimeout(waitForResult, 1000);
+  }
+}
+
+$('#join').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const network = { action: 'connect', ssid: $('#ssid').value, password: $('#password').value, hidden: $('#hidden').checked };
+  try {
+    await request('/api/wifi', network);
+  } catch (err) {
+    $('#join-error').textContent = err.message;
+    return;
+  }
+  showProgress(`Connecting to ${network.ssid}…`, 'This takes up to 20 seconds.');
+  lostPolls = 0;
+  setTimeout(waitForResult, 1500);
+});
+
+$('#show').addEventListener('change', (e) => { $('#password').type = e.target.checked ? 'text' : 'password'; });
+$('#other').addEventListener('click', () => choose('', true, true));
+$('#rescan').addEventListener('click', async () => {
+  try { await request('/api/wifi', { action: 'scan' }); } catch (e) { /* refresh shows the old list */ }
+  const li = document.createElement('li');
+  li.className = 'hint';
+  li.textContent = 'Looking for networks…';
+  $('#networks').replaceChildren(li);
+  setTimeout(refresh, 1500);
+});
+$('#again').addEventListener('click', () => {
+  $('#progress').hidden = true;
+  $('#pick').hidden = false;
+  $('#join').hidden = true;
+  refresh();
+});
+$('#done').addEventListener('click', async () => {
+  try { await request('/api/wifi', { action: 'finish' }); } catch (e) { /* closes by itself later */ }
+  $('#done').hidden = true;
+  $('#detail').textContent = 'The setup hotspot is closing. Switch your phone back to your usual Wi-Fi.';
+});
+
+refresh();
+</script>
+</body>
+</html>

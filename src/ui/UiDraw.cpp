@@ -6,7 +6,9 @@
 #include <Comfort.h>
 
 #include <algorithm>
+#include <cstring>
 
+#include "Device.h"
 #include "Text.h"
 #include "Theme.h"
 #include "Ui.h"
@@ -23,6 +25,7 @@ constexpr int kTitleBaseline = 13;
 constexpr int kButtonY[] = {11, 67, 124};
 constexpr int kMenuRows = 6;
 constexpr int kMenuRowHeight = 19;
+constexpr uint16_t kQrLight = theme::rgb(255, 255, 255);
 
 const lgfx::IFont* const kSmall = &fonts::DejaVu9;
 const lgfx::IFont* const kBody = &fonts::DejaVu12;
@@ -32,9 +35,10 @@ const lgfx::IFont* const kHuge = &fonts::DejaVu40;
 
 // In the order of Ui::Item.
 constexpr const char* kItemLabels[] = {
-    "Brightness", "Dim after", "Units",   "Status LED",    "Temp. offset", "Altitude",
-    "CO_2 self-calibration",  "Clean fan", "Calibrate CO_2", "Restart",      "Factory reset",
-    "Close",
+    "Brightness",   "Dim after", "Units",     "Status LED",
+    "Wi-Fi",        "Set up Wi-Fi", "Temp. offset", "Altitude",
+    "CO_2 self-calibration", "Clean fan", "Calibrate CO_2", "Forget Wi-Fi",
+    "Restart",      "Factory reset", "Close",
 };
 
 const char* label(Metric m) {
@@ -158,6 +162,20 @@ void Ui::draw(uint32_t nowMs) {
   static constexpr Metric kGases[] = {Metric::Co2, Metric::Hcho, Metric::Voc, Metric::Nox};
 
   frame_.fillScreen(theme::kBackground);
+  // These take over the whole screen.
+  if (ota_->active() || ota_->succeeded()) {
+    drawUpdate();
+    frame_.pushSprite(0, 0);
+    return;
+  }
+  if (wifi_->setupActive()) {
+    drawSetup();
+    const bool done = wifi_->setupState() == SetupState::Succeeded;
+    drawHints(Hint::None, done ? Hint::Check : Hint::Cross, Hint::None);
+    frame_.pushSprite(0, 0);
+    return;
+  }
+
   Hint hints[3] = {Hint::Up, Hint::Select, Hint::Down};
   switch (mode_) {
     case Mode::Pages:
@@ -182,6 +200,9 @@ void Ui::draw(uint32_t nowMs) {
         case Page::TrendDay:
           drawTrend(true);
           break;
+        case Page::Network:
+          drawNetwork();
+          break;
         case Page::Device:
           drawDevice(nowMs);
           break;
@@ -200,6 +221,10 @@ void Ui::draw(uint32_t nowMs) {
     case Mode::Confirm:
       drawConfirm();
       hints[0] = Hint::Cross, hints[1] = Hint::Check, hints[2] = Hint::Cross;
+      break;
+    case Mode::Link:
+      drawLink();
+      hints[0] = hints[1] = hints[2] = Hint::Cross;
       break;
   }
   if (alertVisible_) {
@@ -225,6 +250,11 @@ void Ui::drawTitle(const char* title) {
     const int width = richWidth(frame_, name) + 12;
     frame_.fillRoundRect(kRight - width, 2, width, 14, 4, theme::levelColor(level));
     drawRich(frame_, name, kRight - width + 6, kTitleBaseline, theme::kBackground);
+    // Wi-Fi status beside it: grey when connected, faint while looking.
+    if (wifi_->state() != WifiState::Off) {
+      const bool connected = wifi_->state() == WifiState::Connected;
+      drawWifiIcon(kRight - width - 11, 15, connected ? theme::kMuted : theme::kFaint);
+    }
   }
   frame_.drawFastHLine(kLeft, 18, kRight - kLeft, theme::kFaint);
 }
@@ -533,6 +563,212 @@ void Ui::drawDevice(uint32_t nowMs) {
   line("Uptime " + duration(nowMs) + ", v" FW_VERSION, theme::kMuted);
 }
 
+void Ui::drawNetwork() {
+  drawTitle("Wi-Fi");
+  const WifiService& w = *wifi_;
+  constexpr int kWidth = kRight - kLeft;
+  frame_.setFont(kBody);
+  int y = 36;
+  auto line = [&](const char* text, uint16_t color) {
+    drawPlain(frame_, text, kLeft, y, color, kWidth);
+    y += 16;
+  };
+  auto footer = [&](const char* text) {
+    frame_.setFont(kSmall);
+    drawRich(frame_, text, kLeft, 129, theme::kMuted);
+  };
+
+  if (!settings_->wifiEnabled || w.saved().size() == 0) {
+    line(settings_->wifiEnabled ? "Not set up yet" : "Wi-Fi is off", theme::kText);
+    line("Works fine without it.", theme::kMuted);
+    footer(w.saved().size() > 0 ? "D1: turn Wi-Fi on" : "D1: set up Wi-Fi with a phone");
+    return;
+  }
+  switch (w.state()) {
+    case WifiState::Connected: {
+      frame_.setFont(kMedium);
+      drawPlain(frame_, w.ssid(), kLeft, 39, theme::kText, kWidth - 22);
+      drawSignal(kRight, 38, w.rssi());
+      frame_.setFont(kBody);
+      y = 58;
+      line((String(device::hostname()) + ".local").c_str(), theme::kMuted);
+      line(w.ip().toString().c_str(), theme::kMuted);
+      const String password = settings_->webPassword[0] != '\0'
+                                  ? String("Web password  ") + settings_->webPassword
+                                  : String("No web password");
+      line(password.c_str(), theme::kMuted);
+      footer("D1: QR code to open the web page");
+      break;
+    }
+    case WifiState::Connecting:
+      line("Connecting to", theme::kMuted);
+      line(w.ssid(), theme::kText);
+      footer("D1: add a network with a phone");
+      break;
+    default: {
+      line("No saved network in range", theme::kText);
+      String names = "Saved: ";
+      for (size_t i = 0; i < w.saved().size(); ++i) {
+        if (i > 0) names += ", ";
+        names += w.saved()[i].ssid;
+      }
+      line(names.c_str(), theme::kMuted);
+      line("Looking again now and then", theme::kMuted);
+      footer("D1: add a network with a phone");
+      break;
+    }
+  }
+}
+
+// Four bars, filled by signal strength, ending at `right`.
+void Ui::drawSignal(int right, int baseline, int8_t rssi) {
+  const int strength = rssi >= -55 ? 4 : rssi >= -65 ? 3 : rssi >= -75 ? 2 : 1;
+  for (int i = 0; i < 4; ++i) {
+    const int height = 3 + 2 * i;
+    frame_.fillRect(right - (4 - i) * 4 + 1, baseline - height, 3, height,
+                    i < strength ? theme::kText : theme::kFaint);
+  }
+}
+
+// A dot and two arcs opening upwards, 11 px wide.
+void Ui::drawWifiIcon(int cx, int bottom, uint16_t color) {
+  const int cy = bottom - 1;
+  frame_.fillCircle(cx, cy, 1, color);
+  frame_.fillArc(cx, cy, 4, 5, 225, 315, color);
+  frame_.fillArc(cx, cy, 7, 8, 225, 315, color);
+}
+
+void Ui::drawSetup() {
+  const WifiService& w = *wifi_;
+  frame_.setFont(kBody);
+  drawRich(frame_, "Wi-Fi setup", kLeft, kTitleBaseline, theme::kAccent);
+  const String ip = w.hotspotIp().toString();
+  int width = 0;  // of the text column beside the QR code
+  auto small = [&](const char* text, int baseline, uint16_t color) {
+    frame_.setFont(kSmall);
+    drawPlain(frame_, text, kLeft, baseline, color, width);
+  };
+
+  switch (w.setupState()) {
+    case SetupState::Waiting: {
+      // Phones join a network from a QR code in this format.
+      const String code = String("WIFI:T:WPA;S:") + w.hotspotSsid() + ";P:" + w.hotspotPassword() + ";;";
+      width = drawQr(code.c_str()) - 4 - kLeft;
+      small("Scan this", 34, theme::kText);
+      small("with your", 46, theme::kText);
+      small("camera", 58, theme::kText);
+      small("or join", 76, theme::kMuted);
+      // The hotspot's name, split after its dash when it doesn't fit.
+      const String ssid = w.hotspotSsid();
+      const int dash = ssid.lastIndexOf('-');
+      frame_.setFont(kSmall);
+      if (frame_.textWidth(ssid.c_str()) > width && dash > 0) {
+        small(ssid.substring(0, dash + 1).c_str(), 88, theme::kText);
+        small(ssid.substring(dash + 1).c_str(), 100, theme::kText);
+      } else {
+        small(ssid.c_str(), 88, theme::kText);
+      }
+      small("password", 113, theme::kMuted);
+      frame_.setFont(kBody);
+      drawPlain(frame_, w.hotspotPassword(), kLeft, 127, theme::kText, width);
+      break;
+    }
+    case SetupState::Joined:
+    case SetupState::Failed: {
+      width = drawQr(("http://" + ip + "/").c_str()) - 4 - kLeft;
+      if (w.setupState() == SetupState::Failed) {
+        small("Couldn't connect:", 36, theme::kAlarm);
+        small(w.setupMessage(), 48, theme::kText);
+        small("Try again on", 66, theme::kMuted);
+        small("your phone.", 78, theme::kMuted);
+      } else {
+        small("Phone joined.", 36, theme::kGood);
+        small("The setup page", 50, theme::kText);
+        small("should open.", 62, theme::kText);
+        small("If not, scan", 80, theme::kMuted);
+        small("this, or open", 92, theme::kMuted);
+      }
+      small(ip.c_str(), 110, theme::kText);
+      break;
+    }
+    case SetupState::Testing:
+      frame_.setFont(kBody);
+      drawRich(frame_, "Connecting to", kLeft, 50, theme::kMuted);
+      frame_.setFont(kMedium);
+      drawPlain(frame_, w.trialSsid(), kLeft, 76, theme::kText, kRight - kLeft);
+      frame_.setFont(kSmall);
+      drawRich(frame_, "This takes up to 20 s", kLeft, 100, theme::kMuted);
+      break;
+    case SetupState::Succeeded: {
+      frame_.setFont(kMedium);
+      drawRich(frame_, "Connected", kLeft, 40, theme::kGood);
+      frame_.setFont(kBody);
+      drawPlain(frame_, w.ssid(), kLeft, 58, theme::kText, kRight - kLeft);
+      const String host = String(device::hostname()) + ".local";
+      drawPlain(frame_, host.c_str(), kLeft, 78, theme::kMuted);
+      drawPlain(frame_, w.ip().toString().c_str(), kLeft, 94, theme::kMuted);
+      const String password = String("Web password  ") + settings_->webPassword;
+      drawPlain(frame_, password.c_str(), kLeft, 112, theme::kMuted, kRight - kLeft);
+      frame_.setFont(kSmall);
+      drawRich(frame_, "D1: done", kLeft, 129, theme::kMuted);
+      break;
+    }
+    case SetupState::Off:
+      break;
+  }
+}
+
+// QR code of the web page, to open it on a phone.
+void Ui::drawLink() {
+  const String ip = wifi_->ip().toString();
+  const int width = drawQr(("http://" + ip + "/").c_str()) - 4 - kLeft;
+  frame_.setFont(kBody);
+  drawRich(frame_, "Web page", kLeft, kTitleBaseline, theme::kAccent);
+  frame_.setFont(kSmall);
+  drawPlain(frame_, "Scan to open it", kLeft, 36, theme::kText, width);
+  drawPlain(frame_, "on your phone,", kLeft, 48, theme::kText, width);
+  drawPlain(frame_, "or go to", kLeft, 66, theme::kMuted, width);
+  drawPlain(frame_, ip.c_str(), kLeft, 78, theme::kText, width);
+  drawPlain(frame_, "Any button", kLeft, 112, theme::kMuted, width);
+  drawPlain(frame_, "closes this.", kLeft, 124, theme::kMuted, width);
+}
+
+void Ui::drawUpdate() {
+  const bool done = ota_->succeeded();
+  const int percent = done ? 100 : ota_->percent();
+  constexpr int kWidth = kRight - kLeft;
+  frame_.setFont(kMedium);
+  drawRich(frame_, "Updating firmware", kLeft, 40, theme::kText);
+  frame_.drawRect(kLeft, 56, kWidth, 14, theme::kMuted);
+  frame_.fillRect(kLeft + 2, 58, (kWidth - 4) * percent / 100, 10,
+                  done ? theme::kGood : theme::kAccent);
+  frame_.setFont(kBody);
+  if (done) {
+    drawRich(frame_, "Done, restarting...", kLeft, 92, theme::kGood);
+  } else {
+    drawRich(frame_, (String(percent) + " %").c_str(), kLeft, 92, theme::kMuted);
+  }
+  drawRich(frame_, "Keep the power on", kLeft, 120, theme::kMuted);
+}
+
+// A QR code at the right edge, in a white square with a quiet zone of two
+// modules; returns the square's left edge. 4 px modules scan well with phones.
+int Ui::drawQr(const char* text) {
+  constexpr int kModule = 4;
+  // What versions 1 to 4 hold in byte mode with low error correction.
+  constexpr size_t kCapacity[] = {17, 32, 53, 78};
+  const size_t length = strlen(text);
+  int version = 1;
+  while (version < 4 && length > kCapacity[version - 1]) ++version;
+  const int code = (17 + 4 * version) * kModule;
+  const int size = code + 4 * kModule;
+  const int left = frame_.width() - 1 - size;
+  const int top = (frame_.height() - size) / 2;
+  frame_.fillRect(left, top, size, size, kQrLight);
+  frame_.qrcode(text, left + 2 * kModule, top + 2 * kModule, code, version);
+  return left;
+}
+
 void Ui::drawMenu() {
   static_assert(std::size(kItemLabels) == static_cast<size_t>(Item::Count), "one label per item");
   const bool editing = mode_ == Mode::Edit;
@@ -576,6 +812,11 @@ void Ui::drawConfirm() {
       title = "Calibrate CO_2?";
       line1 = "Sets 420 ppm. Only outdoors,";
       line2 = "after 3 min in fresh air.";
+      break;
+    case Item::ForgetWifi:
+      title = "Forget Wi-Fi?";
+      line1 = "Removes every saved network.";
+      line2 = "Set up again from the Wi-Fi page.";
       break;
     case Item::Restart:
       title = "Restart?";
@@ -720,6 +961,8 @@ String Ui::itemValue(Item item) const {
       return String(s.altitudeM) + " m";
     case Item::Co2SelfCalibration:
       return s.co2SelfCalibration ? "On" : "Off";
+    case Item::Wifi:
+      return s.wifiEnabled ? "On" : "Off";
     case Item::Close:
       return "";
     default:

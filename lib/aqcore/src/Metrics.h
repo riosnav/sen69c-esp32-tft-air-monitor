@@ -28,6 +28,12 @@ constexpr size_t kMetricCount = static_cast<size_t>(Metric::Count);
 
 constexpr size_t idx(Metric m) { return static_cast<size_t>(m); }
 
+// Stable machine-readable names (web API, MQTT), in the order of Metric.
+constexpr const char* kMetricIds[kMetricCount] = {"pm1", "pm25", "pm4", "pm10", "co2",
+                                                  "hcho", "voc", "nox", "temp", "rh"};
+
+constexpr const char* metricId(Metric m) { return kMetricIds[idx(m)]; }
+
 // One reading of every metric. NaN marks a value the sensor doesn't provide
 // yet (warm-up) or couldn't measure.
 struct Measurement {

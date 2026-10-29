@@ -1,0 +1,581 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Air Monitor</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%233ccd6e'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #f3f4f6; --card: #fff; --text: #16181d; --muted: #646a73; --line: #e1e4e8;
+  --accent: #0b7fbf; --good: #1d9a50; --warning: #c27400; --alarm: #d4362b; --unknown: #8b9099;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1013; --card: #171a1f; --text: #e9ebee; --muted: #9aa0a8; --line: #2a2e35;
+    --accent: #50c8ff; --good: #3ccd6e; --warning: #ffb000; --alarm: #f54236; --unknown: #6e737b;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
+.wrap { max-width: 980px; margin: 0 auto; padding: 0 16px 40px; }
+header { display: flex; align-items: center; gap: 12px; padding: 18px 0 14px; }
+h1 { font-size: 21px; margin: 0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+h2 { font-size: 16px; margin: 26px 0 10px; }
+.pill { padding: 3px 12px; border-radius: 999px; font-weight: 650; font-size: 13px; letter-spacing: .05em; color: #fff; background: var(--unknown); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.banner { border-color: var(--alarm); color: var(--alarm); margin: 0 0 12px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+button.metric { text-align: left; font: inherit; color: inherit; border-left: 4px solid var(--unknown); cursor: pointer; }
+button.metric.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
+.metric .label { color: var(--muted); font-size: 13px; }
+.metric .value { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.metric .unit { color: var(--muted); font-size: 13px; margin-left: 4px; }
+.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: none; color: var(--text); padding: 7px 12px; font: inherit; cursor: pointer; }
+.seg button.on { background: var(--accent); color: #fff; }
+canvas { width: 100%; height: 240px; display: block; margin-top: 10px; }
+.stats, .hint { color: var(--muted); font-size: 13px; }
+.stats { margin-top: 6px; min-height: 1.4em; }
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }
+dt { color: var(--muted); }
+dd { margin: 0; overflow-wrap: anywhere; }
+details.card { margin-bottom: 10px; }
+summary { cursor: pointer; font-weight: 600; }
+label { display: grid; gap: 4px; margin: 12px 0; font-size: 14px; }
+label.check { display: flex; align-items: center; gap: 8px; }
+input, select, button { font: inherit; }
+input[type=text], input[type=password], input[type=number], select {
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); width: 100%; max-width: 360px;
+}
+input[type=range] { width: 100%; max-width: 360px; }
+button.primary { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 8px 16px; cursor: pointer; }
+button.plain { background: none; border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+.msg { font-size: 14px; min-height: 1.4em; margin: 8px 0 0; }
+.msg.error { color: var(--alarm); }
+ul.saved { list-style: none; padding: 0; margin: 8px 0; }
+ul.saved li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.task { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.task:last-of-type { border-bottom: 0; }
+.task p { margin: 2px 0 0; }
+progress { width: 100%; max-width: 360px; }
+footer { color: var(--muted); font-size: 12px; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><h1 id="name">Air Monitor</h1><span id="overall" class="pill">&hellip;</span></header>
+  <p id="offline" class="card banner" hidden>Can't reach the monitor. Retrying&hellip;</p>
+
+  <div id="metrics" class="grid"></div>
+
+  <h2 id="trend">Trend</h2>
+  <div class="card">
+    <div class="row">
+      <select id="chart-metric" aria-label="Value shown"></select>
+      <span class="seg"><button type="button" data-range="hour" class="on">1 hour</button><button type="button" data-range="day">24 hours</button></span>
+    </div>
+    <canvas id="chart"></canvas>
+    <div id="chart-stats" class="stats"></div>
+  </div>
+
+  <h2>Device</h2>
+  <div class="card"><dl id="device"></dl></div>
+
+  <h2>Settings</h2>
+  <p class="hint">Changes ask for the web password shown on the monitor's Wi-Fi page (any user name).</p>
+
+  <details class="card">
+    <summary>Display and sensor</summary>
+    <form id="settings">
+      <label>Name <input type="text" name="deviceName" maxlength="31" required></label>
+      <label>Brightness <span id="brightness-out" class="hint"></span>
+        <input type="range" name="brightness" min="10" max="100" step="10"></label>
+      <label>Dim the screen after
+        <select name="dimAfter">
+          <option value="0">Never</option><option value="30">30 s</option><option value="60">1 min</option>
+          <option value="120">2 min</option><option value="300">5 min</option><option value="900">15 min</option>
+        </select></label>
+      <label>Temperature unit
+        <select name="units"><option value="C">&deg;C</option><option value="F">&deg;F</option></select></label>
+      <label>Status LED
+        <select name="led"><option value="off">Off</option><option value="dim">Dim</option><option value="bright">Bright</option></select></label>
+      <label>Temperature offset (&deg;C, corrects self-heating)
+        <input type="number" name="tempOffset" min="-10" max="10" step="0.1"></label>
+      <label>Altitude (m, for the CO&#8322; reading)
+        <input type="number" name="altitude" min="0" max="3000" step="10"></label>
+      <label class="check"><input type="checkbox" name="co2SelfCalibration"> CO&#8322; self-calibration (needs fresh air at least once a week)</label>
+      <label class="check"><input type="checkbox" name="wifiEnabled"> Wi-Fi (turning it off disconnects this page)</label>
+      <label>New web password <input type="password" name="newPassword" maxlength="32" autocomplete="new-password" placeholder="unchanged"></label>
+      <label class="check"><input type="checkbox" name="noPassword"> No web password (anyone on your network can change settings)</label>
+      <p id="password-state" class="hint"></p>
+      <button class="primary">Save</button>
+      <p id="settings-msg" class="msg"></p>
+    </form>
+  </details>
+
+  <details class="card">
+    <summary>Wi-Fi networks</summary>
+    <p id="wifi-status"></p>
+    <p class="hint">The monitor joins the strongest saved network in range, and works without Wi-Fi elsewhere.</p>
+    <ul id="saved" class="saved"></ul>
+    <form id="add-network">
+      <label>Add a network <input type="text" name="ssid" maxlength="32" placeholder="Network name" autocapitalize="none" required></label>
+      <label>Password <input type="password" name="password" maxlength="64" autocomplete="off" placeholder="none for an open network"></label>
+      <label class="check"><input type="checkbox" name="hidden"> Hidden network</label>
+      <button class="primary">Save network</button>
+      <p id="wifi-msg" class="msg"></p>
+    </form>
+    <p class="hint">To set up Wi-Fi from a phone instead: on the monitor, hold D1 for the settings and choose <em>Set up Wi-Fi</em>.</p>
+  </details>
+
+  <details class="card">
+    <summary>Maintenance</summary>
+    <div class="task">
+      <div><strong>Clean the fan</strong><p class="hint">Full speed for 10 s; readings pause for about 40 s. The sensor also does this weekly by itself.</p></div>
+      <button type="button" class="plain" id="clean-fan">Clean</button>
+    </div>
+    <div class="task">
+      <div><strong>Calibrate CO&#8322;</strong><p class="hint">Only after at least 3 minutes in fresh outdoor air, with the reference value of that air.</p></div>
+      <span class="row"><input type="number" id="ppm" value="420" min="350" max="2000" step="1" style="width:100px" aria-label="Reference ppm"> ppm
+        <button type="button" class="plain" id="calibrate">Calibrate</button></span>
+    </div>
+    <div class="task">
+      <div><strong>Restart</strong></div>
+      <button type="button" class="plain" id="restart">Restart</button>
+    </div>
+    <p id="action-msg" class="msg"></p>
+  </details>
+
+  <details class="card">
+    <summary>Firmware update</summary>
+    <p id="version"></p>
+    <p class="hint">Upload a <code>firmware.bin</code> (not <code>firmware.factory.bin</code>). If the new firmware can't rejoin Wi-Fi within 5 minutes, the monitor goes back to the current one.</p>
+    <p><input type="file" id="firmware" accept=".bin"></p>
+    <button type="button" class="primary" id="upload">Update</button>
+    <p><progress id="ota-progress" max="1" value="0" hidden></progress></p>
+    <p id="ota-msg" class="msg"></p>
+  </details>
+
+  <footer>SEN69C Air Monitor &middot; free software under the GNU GPL v3 or later</footer>
+</div>
+<script>
+'use strict';
+const $ = (selector, root = document) => root.querySelector(selector);
+
+const METRICS = [
+  { id: 'co2', label: 'CO₂', unit: 'ppm', dec: 0 },
+  { id: 'pm25', label: 'PM2.5', unit: 'µg/m³', dec: 1 },
+  { id: 'pm10', label: 'PM10', unit: 'µg/m³', dec: 1 },
+  { id: 'hcho', label: 'Formaldehyde', unit: 'ppb', dec: 1 },
+  { id: 'voc', label: 'VOC index', unit: '', dec: 0 },
+  { id: 'nox', label: 'NOₓ index', unit: '', dec: 0 },
+  { id: 'temp', label: 'Temperature', unit: '°C', dec: 1 },
+  { id: 'rh', label: 'Humidity', unit: '%', dec: 0 },
+  { id: 'pm1', label: 'PM1', unit: 'µg/m³', dec: 1 },
+  { id: 'pm4', label: 'PM4', unit: 'µg/m³', dec: 1 },
+];
+const LEVELS = { good: 'GOOD', warning: 'FAIR', alarm: 'POOR', unknown: '…' };
+// Smallest span the chart zooms into, so sensor noise doesn't look like a trend.
+const MIN_SPAN = { co2: 100, pm25: 5, pm10: 5, hcho: 10, voc: 20, nox: 5, temp: 1, rh: 5, pm1: 5, pm4: 5 };
+
+let state = null;
+const chart = { metric: 'co2', range: 'hour', data: null, loadedAt: 0 };
+
+const fahrenheit = () => state !== null && state.units === 'F';
+const convert = (id, v) => (v != null && id === 'temp' && fahrenheit() ? v * 9 / 5 + 32 : v);
+const unitOf = (m) => (m.id === 'temp' ? (fahrenheit() ? '°F' : '°C') : m.unit);
+const format = (m, v) => (v == null ? '--' : convert(m.id, v).toFixed(m.dec));
+
+async function request(path, options) {
+  const response = await fetch(path, options);
+  const text = await response.text();
+  if (!response.ok) throw new Error(text || `${response.status} ${response.statusText}`);
+  return text && (response.headers.get('Content-Type') || '').includes('json') ? JSON.parse(text) : text;
+}
+
+// Asking /api/auth first makes the browser prompt for the web password (once)
+// before anything is sent.
+async function post(path, body) {
+  await request('/api/auth');
+  return request(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+}
+
+function message(id, text, error = false) {
+  const el = $('#' + id);
+  el.textContent = text;
+  el.classList.toggle('error', error);
+}
+
+function duration(seconds) {
+  const minutes = Math.floor(seconds / 60), hours = Math.floor(minutes / 60), days = Math.floor(hours / 24);
+  if (minutes < 1) return 'less than a minute';
+  if (hours < 1) return `${minutes} min`;
+  if (days < 2) return `${hours} h ${minutes % 60} min`;
+  return `${days} d ${hours % 24} h`;
+}
+
+// ---------------------------------------------------------------- readings
+
+function buildCards() {
+  for (const m of METRICS) {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'card metric';
+    card.id = 'card-' + m.id;
+    card.innerHTML = '<div class="label"></div><span class="value">--</span><span class="unit"></span>';
+    $('.label', card).textContent = m.label;
+    card.addEventListener('click', () => selectMetric(m.id, true));
+    $('#metrics').append(card);
+    $('#chart-metric').add(new Option(m.label, m.id));
+  }
+}
+
+function renderState() {
+  const s = state;
+  document.title = s.name;
+  $('#name').textContent = s.name;
+  const pill = $('#overall');
+  pill.textContent = LEVELS[s.overall];
+  pill.style.background = `var(--${s.overall})`;
+  for (const m of METRICS) {
+    const d = s.metrics[m.id];
+    const card = $('#card-' + m.id);
+    $('.value', card).textContent = format(m, d.value);
+    $('.unit', card).textContent = unitOf(m);
+    card.style.borderLeftColor = `var(--${d.level})`;
+  }
+
+  const sensor = s.sensor;
+  let status = { measuring: 'Measuring', busy: sensor.activity, starting: 'Starting', 'not found': 'Not found' }[sensor.state];
+  if (sensor.state === 'measuring') status += ' for ' + duration(sensor.measuringFor);
+  if (sensor.status) status += `, device status 0x${sensor.status.toString(16)}`;
+  if (sensor.error) status += `, I²C error ${sensor.error}`;
+  const rows = [
+    ['Sensor', sensor.product ? `${sensor.product}, firmware ${sensor.firmware}` : 'not found'],
+    ['Serial number', sensor.serial || '–'],
+    ['Status', status],
+  ];
+  if (s.battery) rows.push(['Battery', `${s.battery.volts.toFixed(2)} V, ${s.battery.percent ?? '?'} %`]);
+  rows.push(['Wi-Fi', s.wifi.ssid ? `${s.wifi.ssid}, ${s.wifi.rssi} dBm` : 'not connected']);
+  rows.push(['Address', `${s.host}.local`]);
+  rows.push(['Firmware', `v${s.version}, running for ${duration(s.uptime)}`]);
+  $('#device').replaceChildren(...rows.flatMap(([term, value]) => {
+    const dt = document.createElement('dt');
+    const dd = document.createElement('dd');
+    dt.textContent = term;
+    dd.textContent = value;
+    return [dt, dd];
+  }));
+  $('#version').textContent = `Running v${s.version}.`;
+}
+
+async function poll() {
+  try {
+    state = await request('/api/state');
+    renderState();
+    $('#offline').hidden = true;
+    const stale = Date.now() - chart.loadedAt > (chart.range === 'hour' ? 10000 : 60000);
+    if (stale) loadChart(); else drawChart();
+  } catch (e) {
+    $('#offline').hidden = false;
+  }
+  setTimeout(poll, 5000);
+}
+
+// ---------------------------------------------------------------- chart
+
+function selectMetric(id, scroll) {
+  chart.metric = id;
+  chart.data = null;
+  $('#chart-metric').value = id;
+  document.querySelectorAll('.metric').forEach((c) => c.classList.toggle('selected', c.id === 'card-' + id));
+  drawChart();
+  loadChart();
+  if (scroll) $('#trend').scrollIntoView({ behavior: 'smooth' });
+}
+
+async function loadChart() {
+  const { metric, range } = chart;
+  try {
+    const data = await request(`/api/history?metric=${metric}&range=${range}`);
+    if (metric !== chart.metric || range !== chart.range) return;  // changed meanwhile
+    chart.data = data;
+    chart.loadedAt = Date.now();
+    drawChart();
+  } catch (e) { /* the next poll retries */ }
+}
+
+function drawChart() {
+  const canvas = $('#chart');
+  const dpr = window.devicePixelRatio || 1;
+  const width = canvas.clientWidth, height = canvas.clientHeight;
+  canvas.width = Math.round(width * dpr);
+  canvas.height = Math.round(height * dpr);
+  const g = canvas.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const css = getComputedStyle(document.documentElement);
+  const color = (name) => css.getPropertyValue('--' + name).trim();
+  g.font = '12px system-ui, sans-serif';
+  g.fillStyle = color('muted');
+  const m = METRICS.find((x) => x.id === chart.metric);
+  const values = chart.data && state ? chart.data.values.map((v) => convert(m.id, v)) : [];
+  const known = values.filter((v) => v != null);
+  if (known.length === 0) {
+    g.textAlign = 'center';
+    g.fillText(chart.data ? 'Collecting data…' : 'Loading…', width / 2, height / 2);
+    $('#chart-stats').textContent = '';
+    return;
+  }
+
+  let lo = Math.min(...known), hi = Math.max(...known);
+  const minSpan = MIN_SPAN[m.id] * (m.id === 'temp' && fahrenheit() ? 1.8 : 1);
+  if (hi - lo < minSpan) {
+    const middle = (hi + lo) / 2;
+    lo = middle - minSpan / 2;
+    hi = middle + minSpan / 2;
+  }
+  const pad = (hi - lo) * 0.1;
+  lo -= pad;
+  hi += pad;
+  if (m.id !== 'temp') lo = Math.max(lo, 0);
+  const left = 44, right = width - 8, top = 8, bottom = height - 22;
+  const capacity = chart.data.capacity;
+  const x = (i) => left + (capacity - values.length + i) / (capacity - 1) * (right - left);
+  const y = (v) => bottom - (v - lo) / (hi - lo) * (bottom - top);
+
+  g.strokeStyle = color('line');
+  g.lineWidth = 1;
+  g.textAlign = 'right';
+  g.textBaseline = 'middle';
+  for (let i = 0; i <= 4; i++) {
+    const v = lo + (hi - lo) * i / 4;
+    const yy = Math.round(y(v)) + 0.5;
+    g.beginPath();
+    g.moveTo(left, yy);
+    g.lineTo(right, yy);
+    g.stroke();
+    g.fillText(v.toFixed(hi - lo < 10 ? 1 : 0), left - 6, yy);
+  }
+  g.textBaseline = 'top';
+  const labels = chart.range === 'hour' ? ['−60 min', '−45', '−30', '−15', 'now'] : ['−24 h', '−18', '−12', '−6', 'now'];
+  labels.forEach((text, i) => {
+    g.textAlign = i === 0 ? 'left' : i === labels.length - 1 ? 'right' : 'center';
+    g.fillText(text, left + (right - left) * i / (labels.length - 1), bottom + 6);
+  });
+
+  // Warning and alarm limits in view, dashed.
+  const limits = state.metrics[m.id];
+  g.setLineDash([4, 4]);
+  for (const [limit, level] of [[limits.warn[0], 'warning'], [limits.warn[1], 'warning'], [limits.alarm[0], 'alarm'], [limits.alarm[1], 'alarm']]) {
+    const v = convert(m.id, limit);
+    if (v == null || v <= lo || v >= hi) continue;
+    g.strokeStyle = color(level);
+    g.beginPath();
+    g.moveTo(left, y(v));
+    g.lineTo(right, y(v));
+    g.stroke();
+  }
+  g.setLineDash([]);
+
+  // The data; gaps where there was none.
+  g.strokeStyle = g.fillStyle = color('accent');
+  g.lineWidth = 2;
+  g.lineJoin = 'round';
+  g.beginPath();
+  let drawing = false;
+  values.forEach((v, i) => {
+    if (v == null) {
+      drawing = false;
+      return;
+    }
+    if (drawing) {
+      g.lineTo(x(i), y(v));
+    } else if (i + 1 < values.length && values[i + 1] != null) {
+      g.moveTo(x(i), y(v));
+      drawing = true;
+    } else {
+      g.fillRect(x(i) - 1.5, y(v) - 1.5, 3, 3);  // isolated point
+    }
+  });
+  g.stroke();
+
+  const f = (v) => v.toFixed(m.dec);
+  const mean = known.reduce((a, b) => a + b, 0) / known.length;
+  $('#chart-stats').textContent =
+    `Latest ${f(known[known.length - 1])} · min ${f(Math.min(...known))} · max ${f(Math.max(...known))} · mean ${f(mean)} ${unitOf(m)}`;
+}
+
+// ---------------------------------------------------------------- settings
+
+async function loadSettings() {
+  const s = await request('/api/settings');
+  const f = $('#settings').elements;
+  f.deviceName.value = s.name;
+  f.brightness.value = s.brightness;
+  $('#brightness-out').textContent = s.brightness + ' %';
+  f.dimAfter.value = s.dimAfter;
+  f.units.value = s.fahrenheit ? 'F' : 'C';
+  f.led.value = s.led;
+  f.tempOffset.value = s.tempOffset;
+  f.altitude.value = s.altitude;
+  f.co2SelfCalibration.checked = s.co2SelfCalibration;
+  f.wifiEnabled.checked = s.wifiEnabled;
+  $('#password-state').textContent = s.passwordSet
+    ? 'A web password is set.'
+    : 'No web password is set: anyone on your network can change settings.';
+}
+
+$('#settings').elements.brightness.addEventListener('input', (e) => {
+  $('#brightness-out').textContent = e.target.value + ' %';
+});
+
+$('#settings').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.target.elements;
+  const body = {
+    name: f.deviceName.value.trim(),
+    brightness: Number(f.brightness.value),
+    dimAfter: Number(f.dimAfter.value),
+    fahrenheit: f.units.value === 'F',
+    led: f.led.value,
+    tempOffset: Number(f.tempOffset.value),
+    altitude: Number(f.altitude.value),
+    co2SelfCalibration: f.co2SelfCalibration.checked,
+    wifiEnabled: f.wifiEnabled.checked,
+  };
+  if (f.noPassword.checked) body.webPassword = '';
+  else if (f.newPassword.value) body.webPassword = f.newPassword.value;
+  try {
+    await post('/api/settings', body);
+    f.newPassword.value = '';
+    f.noPassword.checked = false;
+    message('settings-msg', 'Saved.');
+    loadSettings();
+  } catch (err) {
+    message('settings-msg', err.message, true);
+  }
+});
+
+// ---------------------------------------------------------------- Wi-Fi
+
+async function loadWifi() {
+  const w = await request('/api/wifi');
+  $('#wifi-status').textContent = w.state === 'connected'
+    ? `Connected to ${w.ssid} (${w.rssi} dBm) as ${w.ip}, ${w.host}.`
+    : `Wi-Fi is ${w.state}.`;
+  $('#saved').replaceChildren(...w.saved.map((n) => {
+    const li = document.createElement('li');
+    const name = document.createElement('span');
+    name.textContent = n.ssid + (n.hidden ? ' (hidden)' : '');
+    const forget = document.createElement('button');
+    forget.type = 'button';
+    forget.className = 'plain';
+    forget.textContent = 'Forget';
+    forget.addEventListener('click', async () => {
+      const current = n.ssid === w.ssid;
+      if (!confirm(current ? `Forget ${n.ssid}? The monitor is connected to it, so this page will lose it.` : `Forget ${n.ssid}?`)) return;
+      try {
+        await post('/api/wifi', { action: 'forget', ssid: n.ssid });
+        loadWifi();
+      } catch (err) {
+        message('wifi-msg', err.message, true);
+      }
+    });
+    li.append(name, forget);
+    return li;
+  }));
+}
+
+$('#add-network').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.target.elements;
+  try {
+    await post('/api/wifi', { action: 'save', ssid: f.ssid.value, password: f.password.value, hidden: f.hidden.checked });
+    e.target.reset();
+    message('wifi-msg', 'Saved. The monitor uses it when it is in range.');
+    loadWifi();
+  } catch (err) {
+    message('wifi-msg', err.message, true);
+  }
+});
+
+// ---------------------------------------------------------------- maintenance
+
+async function action(body, done) {
+  try {
+    await post('/api/action', body);
+    message('action-msg', done);
+  } catch (err) {
+    message('action-msg', err.message, true);
+  }
+}
+
+$('#clean-fan').addEventListener('click', () =>
+  action({ action: 'cleanFan' }, 'Fan cleaning started; readings pause for about 40 s.'));
+$('#calibrate').addEventListener('click', () => {
+  const ppm = Number($('#ppm').value);
+  if (confirm(`Calibrate the CO₂ sensor to ${ppm} ppm now? Only do this after at least 3 minutes in fresh outdoor air.`)) {
+    action({ action: 'calibrateCo2', ppm }, 'Calibration started; the monitor shows the result.');
+  }
+});
+$('#restart').addEventListener('click', () => {
+  if (confirm('Restart the monitor?')) action({ action: 'restart' }, 'Restarting…');
+});
+
+// ---------------------------------------------------------------- firmware
+
+$('#upload').addEventListener('click', async () => {
+  const file = $('#firmware').files[0];
+  if (!file) return message('ota-msg', 'Choose a firmware.bin file first.', true);
+  try {
+    await request('/api/auth');
+  } catch (err) {
+    return message('ota-msg', err.message, true);
+  }
+  const bar = $('#ota-progress');
+  bar.hidden = false;
+  bar.value = 0;
+  message('ota-msg', 'Uploading…');
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/ota');
+  xhr.upload.addEventListener('progress', (e) => { if (e.lengthComputable) bar.value = e.loaded / e.total; });
+  xhr.addEventListener('load', () => {
+    if (xhr.status === 200) {
+      message('ota-msg', 'Done. The monitor restarts; this page reloads in 20 s.');
+      setTimeout(() => location.reload(), 20000);
+    } else {
+      bar.hidden = true;
+      message('ota-msg', xhr.responseText || `Update failed (${xhr.status})`, true);
+    }
+  });
+  xhr.addEventListener('error', () => {
+    bar.hidden = true;
+    message('ota-msg', 'Upload failed: the connection was lost.', true);
+  });
+  xhr.send(file);
+});
+
+// ---------------------------------------------------------------- start
+
+buildCards();
+document.querySelectorAll('.seg button').forEach((button) => button.addEventListener('click', () => {
+  chart.range = button.dataset.range;
+  chart.data = null;
+  document.querySelectorAll('.seg button').forEach((b) => b.classList.toggle('on', b === button));
+  drawChart();
+  loadChart();
+}));
+$('#chart-metric').addEventListener('change', (e) => selectMetric(e.target.value, false));
+window.addEventListener('resize', drawChart);
+selectMetric('co2', false);
+poll();
+loadSettings().catch(() => {});
+loadWifi().catch(() => {});
+</script>
+</body>
+</html>

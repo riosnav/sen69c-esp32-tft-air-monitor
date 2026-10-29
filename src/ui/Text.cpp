@@ -71,3 +71,18 @@ int drawRich(LGFX_Sprite& s, const char* text, int x, int baseline, uint16_t col
 }
 
 int richWidth(LGFX_Sprite& s, const char* text) { return render(s, text, 0, 0, 0, false); }
+
+int drawPlain(LGFX_Sprite& s, const char* text, int x, int baseline, uint16_t color,
+              int maxWidth) {
+  s.setTextDatum(baseline_left);
+  s.setTextColor(color);
+  String shown = text;
+  if (s.textWidth(shown.c_str()) > maxWidth) {
+    while (shown.length() > 0 && s.textWidth((shown + "...").c_str()) > maxWidth) {
+      shown.remove(shown.length() - 1);
+    }
+    shown += "...";
+  }
+  s.drawString(shown.c_str(), x, baseline);
+  return s.textWidth(shown.c_str());
+}
