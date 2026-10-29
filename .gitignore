@@ -1,0 +1,12 @@
+# PlatformIO
+.pio/
+platformio_override.ini
+
+# VS Code (keep only the shared extension recommendations)
+.vscode/*
+!.vscode/extensions.json
+
+# OS
+Thumbs.db
+desktop.ini
+.DS_Store

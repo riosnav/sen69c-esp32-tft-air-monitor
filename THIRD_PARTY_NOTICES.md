@@ -1,0 +1,16 @@
+# Third-party notices
+
+The firmware is built from the following third-party components. Each is used under its own
+license, all of which are compatible with this project's GPL-3.0-or-later license. The full license
+texts ship with each component's source, which the build downloads; release binaries will include them.
+
+| Component | Version | License | Source |
+|---|---|---|---|
+| Arduino-ESP32 core | 3.3.11 | LGPL-2.1 | <https://github.com/espressif/arduino-esp32> |
+| ESP-IDF (inside the Arduino core) | 5.5.5 | Apache-2.0, with closed-source binary radio/PHY libraries under Espressif's license | <https://github.com/espressif/esp-idf> |
+| Sensirion I2C SEN69C | 1.1.0 | BSD-3-Clause, © 2026 Sensirion AG | <https://github.com/Sensirion/arduino-i2c-sen69c> |
+| Sensirion Core | 0.7.3 | BSD-3-Clause, © 2020 Sensirion AG | <https://github.com/Sensirion/arduino-core> |
+| LovyanGFX | 1.2.33 | FreeBSD (BSD-2-Clause), including code derived from Adafruit_GFX / Adafruit_ILI9341 (BSD / MIT) and TFT_eSPI (FreeBSD) | <https://github.com/lovyan03/LovyanGFX> |
+
+Build tooling (pioarduino / PlatformIO, the GCC toolchain, esptool) is used to build the firmware but
+is not part of it.
