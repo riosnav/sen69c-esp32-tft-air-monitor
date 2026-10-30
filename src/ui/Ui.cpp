@@ -15,6 +15,7 @@ constexpr bool kPressedLevel[] = {LOW, HIGH, HIGH};
 constexpr uint8_t kDimmedBrightness = 4;  // of 255
 constexpr uint32_t kDrawIntervalMs = 250;
 constexpr uint32_t kToastMs = 4000;
+constexpr uint32_t kMenuTimeoutMs = 60000;
 constexpr uint16_t kOutdoorCo2Ppm = 420;
 
 template <typename E>
@@ -63,6 +64,12 @@ void Ui::update(const SensorSnapshot& snapshot, uint32_t nowMs) {
   for (size_t i = 0; i < 3; ++i) {
     const bool down = digitalRead(kButtonPins[i]) == kPressedLevel[i];
     handleButton(i, buttons_[i].update(down, nowMs), nowMs);
+  }
+  // Left alone, menus close by themselves, saving a value being changed.
+  if (mode_ != Mode::Pages && nowMs - lastInputMs_ >= kMenuTimeoutMs) {
+    if (mode_ == Mode::Edit) commitSettings();
+    mode_ = Mode::Pages;
+    dirty_ = true;
   }
   updateBacklight(nowMs);
   led_.update(aq_->overall(), warmingUp(), alertVisible_ && alertLevel_ == aq::Level::Alarm,

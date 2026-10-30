@@ -40,6 +40,9 @@ struct SensorSnapshot {
   uint8_t firmwareMinor = 0;
   float batteryVolts = NAN;  // NaN when no battery monitor answers
   float batteryPercent = NAN;
+  // Altitude the sensor reported back after it was set; -1 when it couldn't be
+  // read (it can only be read while the sensor is idle, i.e. at start).
+  int32_t confirmedAltitudeM = -1;
   char result[48] = "";       // outcome of the last maintenance operation
   uint32_t resultSequence = 0;  // increments when `result` changes
 };

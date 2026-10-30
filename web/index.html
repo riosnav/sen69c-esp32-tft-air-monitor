@@ -29,8 +29,16 @@ h2 { font-size: 16px; margin: 26px 0 10px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
 .banner { border-color: var(--alarm); color: var(--alarm); margin: 0 0 12px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
-button.metric { text-align: left; font: inherit; color: inherit; border-left: 4px solid var(--unknown); cursor: pointer; }
-button.metric.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
+.metric { position: relative; border-left: 4px solid var(--unknown); cursor: pointer; }
+.metric.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
+.info { position: absolute; top: 8px; right: 8px; width: 20px; height: 20px; border: 1px solid var(--muted); border-radius: 50%;
+  color: var(--muted); font: italic 600 12px/18px Georgia, serif; text-align: center; cursor: help; }
+.info:hover, .info:focus { color: var(--accent); border-color: var(--accent); outline: none; }
+#tip { position: fixed; z-index: 10; width: min(320px, calc(100vw - 24px)); background: var(--card); border: 1px solid var(--line);
+  border-radius: 10px; padding: 10px 12px; box-shadow: 0 8px 28px rgba(0, 0, 0, .3); font-size: 13px; }
+#tip p { margin: 6px 0 0; }
+#tip .basis { color: var(--muted); }
+label.small { font-size: 13px; color: var(--muted); margin: 0; }
 .metric .label { color: var(--muted); font-size: 13px; }
 .metric .value { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .metric .unit { color: var(--muted); font-size: 13px; margin-left: 4px; }
@@ -38,7 +46,7 @@ button.metric.selected { outline: 2px solid var(--accent); outline-offset: -2px;
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .seg button { border: 0; background: none; color: var(--text); padding: 7px 12px; font: inherit; cursor: pointer; }
 .seg button.on { background: var(--accent); color: #fff; }
-canvas { width: 100%; height: 240px; display: block; margin-top: 10px; }
+canvas { width: 100%; height: 240px; display: block; margin-top: 10px; cursor: crosshair; touch-action: pan-y; }
 .stats, .hint { color: var(--muted); font-size: 13px; }
 .stats { margin-top: 6px; min-height: 1.4em; }
 dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }
@@ -78,6 +86,7 @@ footer { color: var(--muted); font-size: 12px; margin-top: 30px; }
     <div class="row">
       <select id="chart-metric" aria-label="Value shown"></select>
       <span class="seg"><button type="button" data-range="hour" class="on">1 hour</button><button type="button" data-range="day">24 hours</button></span>
+      <label class="check small"><input type="checkbox" id="jump"> Jump here when a value is clicked</label>
     </div>
     <canvas id="chart"></canvas>
     <div id="chart-stats" class="stats"></div>
@@ -109,6 +118,7 @@ footer { color: var(--muted); font-size: 12px; margin-top: 30px; }
       <label>Altitude (m, for the CO&#8322; reading)
         <input type="number" name="altitude" min="0" max="3000" step="10"></label>
       <label class="check"><input type="checkbox" name="co2SelfCalibration"> CO&#8322; self-calibration (needs fresh air at least once a week)</label>
+      <label class="check"><input type="checkbox" name="batteryInstalled"> A battery is connected (without one, the battery reading is meaningless)</label>
       <label class="check"><input type="checkbox" name="wifiEnabled"> Wi-Fi (turning it off disconnects this page)</label>
       <label>New web password <input type="password" name="newPassword" maxlength="32" autocomplete="new-password" placeholder="unchanged"></label>
       <label class="check"><input type="checkbox" name="noPassword"> No web password (anyone on your network can change settings)</label>
@@ -163,6 +173,7 @@ footer { color: var(--muted); font-size: 12px; margin-top: 30px; }
 
   <footer>SEN69C Air Monitor &middot; free software under the GNU GPL v3 or later</footer>
 </div>
+<div id="tip" role="tooltip" hidden></div>
 <script>
 'use strict';
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -182,9 +193,63 @@ const METRICS = [
 const LEVELS = { good: 'GOOD', warning: 'FAIR', alarm: 'POOR', unknown: '…' };
 // Smallest span the chart zooms into, so sensor noise doesn't look like a trend.
 const MIN_SPAN = { co2: 100, pm25: 5, pm10: 5, hcho: 10, voc: 20, nox: 5, temp: 1, rh: 5, pm1: 5, pm4: 5 };
+// What each value is, why it matters, and where its limits come from (see the README).
+const INFO = {
+  co2: {
+    what: 'Carbon dioxide, breathed out by people. It shows how well the room is ventilated.',
+    risk: 'Not toxic at indoor levels, but high CO₂ comes with stuffy air and causes drowsiness, headaches and poorer concentration.',
+    basis: 'Warning: Health Canada indoor guideline (1000 ppm, 24-hour average); Germany’s Federal Environment Agency also rates air below 1000 ppm as harmless. Alarm: UK school ventilation guidance (BB101), daily average below 1500 ppm. Outdoor air is about 420 ppm.',
+  },
+  pm1: {
+    what: 'Particles smaller than 1 µm, the finest part of PM2.5: mostly smoke and other combustion.',
+    risk: 'They reach deep into the lungs and the bloodstream.',
+    basis: 'There is no separate guideline for PM1; it is counted in PM2.5.',
+  },
+  pm25: {
+    what: 'Fine particles smaller than 2.5 µm: smoke, cooking, candles, traffic.',
+    risk: 'They reach deep into the lungs; long exposure raises the risk of heart and lung disease.',
+    basis: 'Warning: WHO 2021 24-hour guideline. Alarm: US EPA 24-hour standard.',
+  },
+  pm4: {
+    what: 'Particles smaller than 4 µm, between PM2.5 and PM10.',
+    risk: 'They reach the small airways of the lungs.',
+    basis: 'There is no guideline for PM4.',
+  },
+  pm10: {
+    what: 'Particles smaller than 10 µm: dust, pollen and mould spores, plus all the finer particles.',
+    risk: 'They irritate the nose, throat and airways, and can worsen asthma.',
+    basis: 'Warning: WHO 2021 24-hour guideline. Alarm: US EPA 24-hour standard.',
+  },
+  hcho: {
+    what: 'Formaldehyde, given off by pressed-wood furniture, glues, varnishes, smoke and some cleaning products.',
+    risk: 'It irritates the eyes, nose and throat; long exposure to high levels can cause cancer.',
+    basis: 'Warning: about the WELL building standard. Alarm: WHO 30-minute guideline (0.1 mg/m³, about 80 ppb).',
+  },
+  voc: {
+    what: 'Volatile organic compounds from cooking, cleaning products, paint, perfume and people. An index, not a concentration: 100 is this room’s usual air, learned over about 12 hours.',
+    risk: 'Some of them irritate or cause headaches. The index shows when there is clearly more than usual.',
+    basis: 'Sensirion’s index scale: 100 is usual; well above it means clearly more VOCs than usual.',
+  },
+  nox: {
+    what: 'Nitrogen oxides from burning: gas stoves, heaters, traffic. An index where 1 means none detected.',
+    risk: 'Nitrogen dioxide irritates the airways and worsens asthma.',
+    basis: 'Sensirion’s index scale: 1 is normal; clearly above it means nitrogen oxides are present.',
+  },
+  temp: {
+    what: 'Air temperature at the monitor, corrected by the temperature offset setting.',
+    risk: 'Too cold or too warm affects comfort and sleep; cold homes are a health risk, especially for older people.',
+    basis: 'Usual comfort range. The WHO recommends at least 18 °C indoors in cold weather.',
+  },
+  rh: {
+    what: 'Relative humidity of the air.',
+    risk: 'Too dry irritates the eyes, skin and airways; too humid encourages mould and dust mites.',
+    basis: 'Usual comfort range; above 70 % mould can grow.',
+  },
+};
 
 let state = null;
-const chart = { metric: 'co2', range: 'hour', data: null, loadedAt: 0 };
+// hover: x (CSS px) of the pointer over the chart, or null.
+const chart = { metric: 'co2', range: 'hour', data: null, loadedAt: 0, hover: null };
 
 const fahrenheit = () => state !== null && state.units === 'F';
 const convert = (id, v) => (v != null && id === 'temp' && fahrenheit() ? v * 9 / 5 + 32 : v);
@@ -223,17 +288,109 @@ function duration(seconds) {
 
 function buildCards() {
   for (const m of METRICS) {
-    const card = document.createElement('button');
-    card.type = 'button';
+    const card = document.createElement('div');
     card.className = 'card metric';
     card.id = 'card-' + m.id;
-    card.innerHTML = '<div class="label"></div><span class="value">--</span><span class="unit"></span>';
+    card.tabIndex = 0;
+    card.setAttribute('role', 'button');
+    card.innerHTML = '<div class="label"></div><span class="value">--</span><span class="unit"></span>' +
+      '<span class="info" tabindex="0" role="button">i</span>';
     $('.label', card).textContent = m.label;
-    card.addEventListener('click', () => selectMetric(m.id, true));
+    const choose = () => selectMetric(m.id, $('#jump').checked);
+    card.addEventListener('click', choose);
+    card.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        choose();
+      }
+    });
+
+    const icon = $('.info', card);
+    icon.dataset.id = m.id;
+    icon.setAttribute('aria-label', 'About ' + m.label);
+    // Hovering shows the info; a click or tap keeps it open until the next one.
+    icon.addEventListener('mouseenter', () => { if (!tipPinned) showInfo(icon, false); });
+    icon.addEventListener('mouseleave', () => { if (!tipPinned) hideInfo(); });
+    icon.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (tipFor === icon && tipPinned) hideInfo(); else showInfo(icon, true);
+    });
+    icon.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();
+      e.stopPropagation();
+      icon.click();
+    });
+
     $('#metrics').append(card);
     $('#chart-metric').add(new Option(m.label, m.id));
   }
 }
+
+// ---------------------------------------------------------------- info
+
+const tip = $('#tip');
+let tipFor = null;  // the (i) icon whose info is open
+let tipPinned = false;  // opened by a click or tap rather than by hovering
+
+function limitsText(m) {
+  const d = state && state.metrics[m.id];
+  if (!d) return '';
+  const unit = unitOf(m) ? ' ' + unitOf(m) : '';
+  const v = (x) => +convert(m.id, x).toFixed(1);
+  const side = ([low, high]) =>
+    low != null && high != null ? `below ${v(low)} or above ${v(high)}${unit}`
+      : high != null ? `above ${v(high)}${unit}`
+      : low != null ? `below ${v(low)}${unit}` : '';
+  const warning = side(d.warn), alarm = side(d.alarm);
+  return warning ? `Warning ${warning}. Alarm ${alarm}.` : 'No limit: shown for information.';
+}
+
+function showInfo(icon, pinned) {
+  const m = METRICS.find((x) => x.id === icon.dataset.id);
+  const info = INFO[m.id];
+  const title = document.createElement('strong');
+  title.textContent = m.label;
+  tip.replaceChildren(title);
+  const add = (text, className) => {
+    if (!text) return;
+    const p = document.createElement('p');
+    p.textContent = text;
+    if (className) p.className = className;
+    tip.append(p);
+  };
+  add(info.what);
+  add(info.risk);
+  add(limitsText(m));
+  add(info.basis, 'basis');
+  tip.hidden = false;
+  tipFor = icon;
+  tipPinned = pinned;
+  // Below the icon (above it if there's no room), kept inside the window.
+  const r = icon.getBoundingClientRect();
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  const left = Math.min(Math.max(12, r.right - w), window.innerWidth - w - 12);
+  const top = r.bottom + 6 + h > window.innerHeight - 12 ? Math.max(12, r.top - h - 6) : r.bottom + 6;
+  tip.style.left = left + 'px';
+  tip.style.top = top + 'px';
+}
+
+function hideInfo() {
+  tip.hidden = true;
+  tipFor = null;
+  tipPinned = false;
+}
+
+document.addEventListener('click', (e) => {
+  if (!tip.contains(e.target)) hideInfo();
+  // A tap elsewhere hides the chart's readout (touch has no "pointer left").
+  if (e.target !== $('#chart') && chart.hover !== null) {
+    chart.hover = null;
+    drawChart();
+  }
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideInfo(); });
+window.addEventListener('scroll', hideInfo, { passive: true });
 
 function renderState() {
   const s = state;
@@ -260,6 +417,7 @@ function renderState() {
     ['Serial number', sensor.serial || '–'],
     ['Status', status],
   ];
+  if (sensor.altitude != null) rows.push(['Altitude for CO₂', `${sensor.altitude} m, confirmed by the sensor`]);
   if (s.battery) rows.push(['Battery', `${s.battery.volts.toFixed(2)} V, ${s.battery.percent ?? '?'} %`]);
   rows.push(['Wi-Fi', s.wifi.ssid ? `${s.wifi.ssid}, ${s.wifi.rssi} dBm` : 'not connected']);
   rows.push(['Address', `${s.host}.local`]);
@@ -292,6 +450,7 @@ async function poll() {
 function selectMetric(id, scroll) {
   chart.metric = id;
   chart.data = null;
+  chart.hover = null;
   $('#chart-metric').value = id;
   document.querySelectorAll('.metric').forEach((c) => c.classList.toggle('selected', c.id === 'card-' + id));
   drawChart();
@@ -304,6 +463,7 @@ async function loadChart() {
   try {
     const data = await request(`/api/history?metric=${metric}&range=${range}`);
     if (metric !== chart.metric || range !== chart.range) return;  // changed meanwhile
+    data.at = Date.now();  // the newest value is from about now
     chart.data = data;
     chart.loadedAt = Date.now();
     drawChart();
@@ -344,8 +504,11 @@ function drawChart() {
   hi += pad;
   if (m.id !== 'temp') lo = Math.max(lo, 0);
   const left = 44, right = width - 8, top = 8, bottom = height - 22;
-  const capacity = chart.data.capacity;
-  const x = (i) => left + (capacity - values.length + i) / (capacity - 1) * (right - left);
+  const step = chart.data.step * 1000;
+  const end = chart.data.at;
+  const start = end - (chart.data.capacity - 1) * step;
+  const timeOf = (i) => end - (values.length - 1 - i) * step;
+  const x = (t) => left + (t - start) / (end - start) * (right - left);
   const y = (v) => bottom - (v - lo) / (hi - lo) * (bottom - top);
 
   g.strokeStyle = color('line');
@@ -361,12 +524,22 @@ function drawChart() {
     g.stroke();
     g.fillText(v.toFixed(hi - lo < 10 ? 1 : 0), left - 6, yy);
   }
+  // Time axis: clock times at round intervals, in this browser's time zone.
+  const minutes = chart.range === 'hour' ? (width < 480 ? 15 : 10) : (width < 480 ? 6 : 3) * 60;
+  const interval = minutes * 60000;
+  const zone = new Date(end).getTimezoneOffset() * 60000;
+  g.textAlign = 'center';
   g.textBaseline = 'top';
-  const labels = chart.range === 'hour' ? ['−60 min', '−45', '−30', '−15', 'now'] : ['−24 h', '−18', '−12', '−6', 'now'];
-  labels.forEach((text, i) => {
-    g.textAlign = i === 0 ? 'left' : i === labels.length - 1 ? 'right' : 'center';
-    g.fillText(text, left + (right - left) * i / (labels.length - 1), bottom + 6);
-  });
+  for (let t = Math.ceil((start - zone) / interval) * interval + zone; t <= end; t += interval) {
+    const xx = Math.round(x(t)) + 0.5;
+    g.beginPath();
+    g.moveTo(xx, top);
+    g.lineTo(xx, bottom);
+    g.stroke();
+    const label = new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const half = g.measureText(label).width / 2;
+    g.fillText(label, Math.min(Math.max(xx, left + half), right - half), bottom + 6);
+  }
 
   // Warning and alarm limits in view, dashed.
   const limits = state.metrics[m.id];
@@ -393,13 +566,14 @@ function drawChart() {
       drawing = false;
       return;
     }
+    const xi = x(timeOf(i));
     if (drawing) {
-      g.lineTo(x(i), y(v));
+      g.lineTo(xi, y(v));
     } else if (i + 1 < values.length && values[i + 1] != null) {
-      g.moveTo(x(i), y(v));
+      g.moveTo(xi, y(v));
       drawing = true;
     } else {
-      g.fillRect(x(i) - 1.5, y(v) - 1.5, 3, 3);  // isolated point
+      g.fillRect(xi - 1.5, y(v) - 1.5, 3, 3);  // isolated point
     }
   });
   g.stroke();
@@ -408,6 +582,34 @@ function drawChart() {
   const mean = known.reduce((a, b) => a + b, 0) / known.length;
   $('#chart-stats').textContent =
     `Latest ${f(known[known.length - 1])} · min ${f(Math.min(...known))} · max ${f(Math.max(...known))} · mean ${f(mean)} ${unitOf(m)}`;
+
+  // Readout of the value nearest to the pointer.
+  if (chart.hover === null) return;
+  const t = start + (chart.hover - left) / (right - left) * (end - start);
+  const i = Math.round(values.length - 1 - (end - t) / step);
+  if (i < 0 || i >= values.length || values[i] == null) return;
+  const xi = Math.round(x(timeOf(i))) + 0.5, yi = y(values[i]);
+  g.strokeStyle = color('muted');
+  g.lineWidth = 1;
+  g.beginPath();
+  g.moveTo(xi, top);
+  g.lineTo(xi, bottom);
+  g.stroke();
+  g.beginPath();
+  g.arc(xi, yi, 4, 0, 2 * Math.PI);
+  g.fill();
+  const when = new Date(timeOf(i)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const text = `${when}   ${f(values[i])} ${unitOf(m)}`.trim();
+  g.font = '600 13px system-ui, sans-serif';
+  const w = g.measureText(text).width + 14;
+  const bx = xi + 8 + w <= right ? xi + 8 : xi - 8 - w;  // beside the line, inside the chart
+  g.fillStyle = color('card');
+  g.fillRect(bx, top, w, 24);
+  g.strokeRect(bx + 0.5, top + 0.5, w - 1, 23);
+  g.fillStyle = color('text');
+  g.textAlign = 'left';
+  g.textBaseline = 'middle';
+  g.fillText(text, bx + 7, top + 12);
 }
 
 // ---------------------------------------------------------------- settings
@@ -424,6 +626,7 @@ async function loadSettings() {
   f.tempOffset.value = s.tempOffset;
   f.altitude.value = s.altitude;
   f.co2SelfCalibration.checked = s.co2SelfCalibration;
+  f.batteryInstalled.checked = s.batteryInstalled;
   f.wifiEnabled.checked = s.wifiEnabled;
   $('#password-state').textContent = s.passwordSet
     ? 'A web password is set.'
@@ -446,6 +649,7 @@ $('#settings').addEventListener('submit', async (e) => {
     tempOffset: Number(f.tempOffset.value),
     altitude: Number(f.altitude.value),
     co2SelfCalibration: f.co2SelfCalibration.checked,
+    batteryInstalled: f.batteryInstalled.checked,
     wifiEnabled: f.wifiEnabled.checked,
   };
   if (f.noPassword.checked) body.webPassword = '';
@@ -562,16 +766,39 @@ $('#upload').addEventListener('click', async () => {
 
 // ---------------------------------------------------------------- start
 
+// Whether clicking a value jumps to the chart; remembered by this browser.
+try {
+  $('#jump').checked = localStorage.getItem('jumpToChart') !== 'off';
+} catch (e) {
+  $('#jump').checked = true;
+}
+$('#jump').addEventListener('change', (e) => {
+  try { localStorage.setItem('jumpToChart', e.target.checked ? 'on' : 'off'); } catch (err) { /* not remembered */ }
+});
+
 buildCards();
 document.querySelectorAll('.seg button').forEach((button) => button.addEventListener('click', () => {
   chart.range = button.dataset.range;
   chart.data = null;
+  chart.hover = null;
   document.querySelectorAll('.seg button').forEach((b) => b.classList.toggle('on', b === button));
   drawChart();
   loadChart();
 }));
 $('#chart-metric').addEventListener('change', (e) => selectMetric(e.target.value, false));
 window.addEventListener('resize', drawChart);
+// Hovering (mouse) or touching and sliding sideways (touch) shows the value at that time.
+for (const type of ['pointerdown', 'pointermove']) {
+  $('#chart').addEventListener(type, (e) => {
+    chart.hover = e.offsetX;
+    drawChart();
+  });
+}
+$('#chart').addEventListener('pointerleave', (e) => {
+  if (e.pointerType !== 'mouse') return;  // a lifted finger keeps the readout
+  chart.hover = null;
+  drawChart();
+});
 selectMetric('co2', false);
 poll();
 loadSettings().catch(() => {});

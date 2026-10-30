@@ -25,6 +25,7 @@ Settings load() {
     s.tempOffsetC = p.getFloat("tOffset", s.tempOffsetC);
     s.altitudeM = p.getUShort("alt", s.altitudeM);
     s.co2SelfCalibration = p.getBool("co2Asc", s.co2SelfCalibration);
+    s.batteryInstalled = p.getBool("battery", s.batteryInstalled);
     s.wifiEnabled = p.getBool("wifi", s.wifiEnabled);
     if (p.isKey("name")) p.getString("name", s.name, sizeof s.name);
     hasPassword = p.isKey("webPass");
@@ -49,6 +50,7 @@ void save(const Settings& s) {
   p.putFloat("tOffset", s.tempOffsetC);
   p.putUShort("alt", s.altitudeM);
   p.putBool("co2Asc", s.co2SelfCalibration);
+  p.putBool("battery", s.batteryInstalled);
   p.putBool("wifi", s.wifiEnabled);
   p.putString("name", s.name);
   p.putString("webPass", s.webPassword);

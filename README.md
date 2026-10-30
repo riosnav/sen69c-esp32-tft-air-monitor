@@ -12,7 +12,8 @@ a [Sensirion SEN69C](https://sensirion.com/products/catalog/SEN69C) environmenta
 - Shows PM1/2.5/4/10, CO₂, formaldehyde (HCHO), VOC and NOx indices, temperature and humidity on the built-in 240×135 screen.
 - Colour-coded levels and a pop-up alert (which also wakes the screen) when a value leaves the healthy range; the NeoPixel shows the overall air quality.
 - Trend graphs of the last hour and the last 24 hours for every value.
-- Settings menu: brightness, auto-dim, °C/°F, status LED, Wi-Fi, temperature offset, altitude, CO₂ self-calibration, fan cleaning, CO₂ recalibration, restart, factory reset. Settings survive restarts.
+- Settings menu: brightness, auto-dim, °C/°F, status LED, Wi-Fi, temperature offset, altitude, CO₂ self-calibration, fan cleaning, CO₂ recalibration, restart, factory reset. Settings survive restarts and power cuts. (The sensor itself forgets the altitude, temperature offset and self-calibration setting when it loses power, so the firmware sends them again every time it starts.)
+- Battery charge (Feather's MAX17048 gauge) when a LiPo is connected and *A battery is connected* is ticked on the web page; without a battery the gauge reads the charger and is ignored.
 - Wi-Fi setup from a phone, no reflashing: scan the QR code on the screen and pick your network. Up to five networks are saved; the monitor joins whichever is in range.
 - Local web page with live values, trend charts, settings, maintenance and firmware updates over Wi-Fi (with automatic rollback if an update fails).
 - Works fully offline; Wi-Fi is optional and everything stays on your network (no cloud).
@@ -41,7 +42,7 @@ When the screen is dimmed, the first press only wakes it.
 
 | Value | Warning | Alarm | Basis |
 |---|---|---|---|
-| CO₂ | 1000 ppm | 1500 ppm | Common ventilation guidance |
+| CO₂ | 1000 ppm | 1500 ppm | Health Canada indoor guideline (24-hour average) and German Federal Environment Agency / UK school ventilation guidance BB101 (daily average) |
 | PM2.5 | 15 µg/m³ | 35 µg/m³ | WHO 2021 24-hour guideline / US EPA 24-hour standard |
 | PM10 | 45 µg/m³ | 150 µg/m³ | WHO 2021 24-hour guideline / US EPA 24-hour standard |
 | Formaldehyde | 40 ppb | 80 ppb | ~WELL building standard / WHO 30-minute guideline (0.1 mg/m³) |

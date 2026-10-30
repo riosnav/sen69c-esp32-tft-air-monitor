@@ -554,11 +554,13 @@ void Ui::drawDevice(uint32_t nowMs) {
   if (s.state == SensorState::Measuring) {
     line("Measuring " + duration(nowMs - s.measuringSinceMs), theme::kMuted);
   }
-  if (std::isnan(s.batteryVolts)) {
-    line("No battery monitor", theme::kMuted);
-  } else {
-    line("Battery " + String(s.batteryVolts, 2) + " V, " + String(s.batteryPercent, 0) + " %",
-         theme::kMuted);
+  if (settings_->batteryInstalled) {
+    if (std::isnan(s.batteryVolts)) {
+      line("No battery monitor", theme::kMuted);
+    } else {
+      line("Battery " + String(s.batteryVolts, 2) + " V, " + String(s.batteryPercent, 0) + " %",
+           theme::kMuted);
+    }
   }
   line("Uptime " + duration(nowMs) + ", v" FW_VERSION, theme::kMuted);
 }

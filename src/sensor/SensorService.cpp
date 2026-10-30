@@ -3,10 +3,18 @@
 #include "SensorService.h"
 
 #include <Wire.h>
+#include <esp_attr.h>
 
 #include <cstdarg>
 
 namespace {
+
+// The altitude the sensor confirmed at its last start, in memory that
+// survives restarts of the ESP32 but not power cuts, like the sensor's own
+// settings. It stays valid when the sensor keeps measuring across a restart.
+RTC_NOINIT_ATTR uint32_t savedAltitude;
+RTC_NOINIT_ATTR uint32_t savedAltitudeCheck;  // tells a saved value from leftover garbage
+constexpr uint32_t kSavedAltitudeKey = 0x5A17C0DE;
 
 constexpr uint8_t kAddrMax17048 = 0x36;
 // Raw values the SEN69C returns while a measurement isn't available yet.
@@ -147,15 +155,28 @@ bool SensorService::startMeasurement(bool resumeIfRunning) {
       {
         Lock lock(mutex_);
         shared_.measuringSinceMs = startedMs_;
+        if (savedAltitudeCheck == (savedAltitude ^ kSavedAltitudeKey)) {
+          shared_.confirmedAltitudeM = savedAltitude;
+        }
       }
       setState(SensorState::Measuring);
       return true;
     }
   }
 
-  // Altitude and CO2 self-calibration can only be set while idle.
+  // Altitude and CO2 self-calibration can only be set while idle. The sensor
+  // forgets both when it loses power, so they're set at every start.
   int16_t error = sen_.setSensorAltitude(config_.altitudeM);
   if (error == 0) {
+    vTaskDelay(pdMS_TO_TICKS(20));
+    uint16_t confirmed = 0;
+    if (sen_.getSensorAltitude(confirmed) == 0) {
+      Serial.printf("Sensor altitude set to %u m\n", confirmed);
+      savedAltitude = confirmed;
+      savedAltitudeCheck = confirmed ^ kSavedAltitudeKey;
+      Lock lock(mutex_);
+      shared_.confirmedAltitudeM = confirmed;
+    }
     error = sen_.setCo2SensorAutomaticSelfCalibration(config_.co2SelfCalibration ? 1 : 0);
     vTaskDelay(pdMS_TO_TICKS(20));  // execution time; the driver doesn't wait here
   }
