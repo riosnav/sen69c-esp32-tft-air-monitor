@@ -226,8 +226,9 @@ void MqttService::announce() {
   const String url = "http://" + wifi_->ip().toString() + "/";
   cJSON_AddStringToObject(dev, "cu", url.c_str());
   cJSON* origin = cJSON_AddObjectToObject(r, "o");
-  cJSON_AddStringToObject(origin, "name", "sen69c-air-monitor");
+  cJSON_AddStringToObject(origin, "name", "sen69c-esp32-tft-air-monitor");
   cJSON_AddStringToObject(origin, "sw", FW_VERSION);
+  cJSON_AddStringToObject(origin, "url", "https://github.com/riosnav/sen69c-esp32-tft-air-monitor");
   // Shared by all the sensors.
   cJSON_AddStringToObject(r, "state_topic", stateTopic_);
   cJSON_AddStringToObject(r, "availability_topic", statusTopic_);

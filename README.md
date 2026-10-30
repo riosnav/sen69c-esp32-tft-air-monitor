@@ -69,9 +69,10 @@ no drivers are needed.
 The Feather's three buttons beside the screen are **D0**, **D1** and **D2**: holding the board with them on the
 left, D0 is the top one. Its **Reset** button is a separate small button; the board has one on each side.
 
-1. **Get the code.** On [this project's GitHub page](https://github.com/riosnav/sen69c-air-monitor) click
-   **Code → Download ZIP** and unzip it, or clone it with git. You get a folder called `sen69c-air-monitor` (from the ZIP: `sen69c-air-monitor-main`; if you find a folder
-   inside a folder, use the inner one, which contains `platformio.ini`). Put it somewhere that isn't synced by
+1. **Get the code.** On [this project's GitHub page](https://github.com/riosnav/sen69c-esp32-tft-air-monitor)
+   click **Code → Download ZIP** and unzip it, or clone it with git. You get a folder called
+   `sen69c-esp32-tft-air-monitor` (from the ZIP: `sen69c-esp32-tft-air-monitor-main`; if you find a folder inside a
+   folder, use the inner one, which contains `platformio.ini`). Put it somewhere that isn't synced by
    OneDrive, iCloud or Dropbox (for example `C:\Projects` on Windows): the build writes hundreds of MB of files,
    and syncing them can make builds fail.
 2. **Install [Visual Studio Code](https://code.visualstudio.com/)** (free).
@@ -266,7 +267,7 @@ start over. Then either upload it over USB as in [Installing the firmware](#inst
 Wi-Fi: on the web page open *Firmware update* and choose
 
 ```text
-sen69c-air-monitor/.pio/build/feather_s3_reversetft/firmware.bin
+sen69c-esp32-tft-air-monitor/.pio/build/feather_s3_reversetft/firmware.bin
 ```
 
 (not `firmware.factory.bin`, which is only for USB). `.pio` is a hidden folder on macOS and Linux: in the file
