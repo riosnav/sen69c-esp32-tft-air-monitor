@@ -25,9 +25,13 @@ constexpr size_t kHotspotPasswordLength = 8;
 
 bool due(uint32_t nowMs, uint32_t atMs) { return static_cast<int32_t>(nowMs - atMs) >= 0; }
 
+// AUTH_EXPIRE is also what a router sends when it rejects the key: a wrong
+// password during setup (hotspot up) came back as that rather than as a
+// handshake timeout.
 bool isPasswordFailure(uint8_t reason) {
   return reason == WIFI_REASON_MIC_FAILURE || reason == WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT ||
-         reason == WIFI_REASON_AUTH_FAIL || reason == WIFI_REASON_HANDSHAKE_TIMEOUT;
+         reason == WIFI_REASON_AUTH_FAIL || reason == WIFI_REASON_HANDSHAKE_TIMEOUT ||
+         reason == WIFI_REASON_AUTH_EXPIRE;
 }
 
 bool isNotFound(uint8_t reason) {
@@ -183,6 +187,7 @@ void WifiService::collectScan(int16_t count) {
 }
 
 void WifiService::planAttempts(int16_t count) {
+  failedSsid_[0] = '\0';  // a new round
   net::SavedNetwork saved[WifiStore::kCapacity];
   for (size_t i = 0; i < store_.size(); ++i) saved[i] = {store_[i].ssid, store_[i].hidden};
   std::vector<net::ScanEntry> entries;
@@ -243,6 +248,7 @@ void WifiService::pollConnecting(uint32_t nowMs) {
 void WifiService::onConnected(uint32_t nowMs) {
   state_ = WifiState::Connected;
   retryDelayMs_ = kFirstRetryMs;
+  failedSsid_[0] = '\0';
   Serial.printf("Wi-Fi: connected to %s, %s\n", ssid_, WiFi.localIP().toString().c_str());
   if (!mdnsStarted_ && MDNS.begin(device::hostname())) {
     MDNS.addService("http", "tcp", 80);
@@ -268,6 +274,8 @@ void WifiService::onAttemptFailed(uint32_t nowMs) {
     ssid_[0] = '\0';
     return;
   }
+  strlcpy(failedSsid_, ssid_, sizeof failedSsid_);
+  failedReason_ = failureReason();
   connectNext(nowMs);
 }
 
@@ -298,6 +306,7 @@ void WifiService::save(const WifiCredentials& network) {
 
 bool WifiService::forget(const char* ssid) {
   if (!store_.forget(ssid)) return false;
+  if (strcmp(ssid, failedSsid_) == 0) failedSsid_[0] = '\0';
   if (state_ != WifiState::Off && strcmp(ssid, ssid_) == 0) {
     WiFi.disconnect();
     searchLater(millis());
@@ -307,6 +316,7 @@ bool WifiService::forget(const char* ssid) {
 
 void WifiService::forgetAll() {
   store_.clear();
+  failedSsid_[0] = '\0';
   if (state_ == WifiState::Connected || state_ == WifiState::Connecting) {
     WiFi.disconnect();
     searchLater(millis());

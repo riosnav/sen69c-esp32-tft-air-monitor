@@ -9,12 +9,25 @@
 
 namespace {
 
-// The altitude the sensor confirmed at its last start, in memory that
-// survives restarts of the ESP32 but not power cuts, like the sensor's own
-// settings. It stays valid when the sensor keeps measuring across a restart.
-RTC_NOINIT_ATTR uint32_t savedAltitude;
-RTC_NOINIT_ATTR uint32_t savedAltitudeCheck;  // tells a saved value from leftover garbage
-constexpr uint32_t kSavedAltitudeKey = 0x5A17C0DE;
+// The settings the sensor was last given (the altitude it confirmed, and CO2
+// self-calibration), in memory that survives restarts of the ESP32 but not
+// power cuts, like the sensor's own settings. They stay valid when the sensor
+// keeps measuring across a restart.
+RTC_NOINIT_ATTR uint32_t sensorSettings;
+RTC_NOINIT_ATTR uint32_t sensorSettingsCheck;  // tells saved settings from leftover garbage
+constexpr uint32_t kSettingsKey = 0x5A17C0DE;
+
+uint32_t pack(uint16_t altitudeM, bool co2SelfCalibration) {
+  return altitudeM | (co2SelfCalibration ? 1u << 16 : 0);
+}
+void remember(uint32_t settings) {
+  sensorSettings = settings;
+  sensorSettingsCheck = settings ^ kSettingsKey;
+}
+void forgetSettings() { sensorSettingsCheck = ~(sensorSettings ^ kSettingsKey); }
+bool remembered(uint32_t settings) {
+  return sensorSettings == settings && sensorSettingsCheck == (settings ^ kSettingsKey);
+}
 
 constexpr uint8_t kAddrMax17048 = 0x36;
 // Raw values the SEN69C returns while a measurement isn't available yet.
@@ -149,37 +162,42 @@ bool SensorService::startMeasurement(bool resumeIfRunning) {
     int16_t rh, t, voc, nox, co2;
     if (sen_.readMeasuredValuesAsIntegers(pm1, pm25, pm4, pm10, rh, t, voc, nox, hcho, co2) == 0 &&
         t != kUnknownI16) {
-      Serial.println("Sensor was already measuring; continuing");
-      applyTemperatureOffset();
-      startedMs_ = millis();
-      {
-        Lock lock(mutex_);
-        shared_.measuringSinceMs = startedMs_;
-        if (savedAltitudeCheck == (savedAltitude ^ kSavedAltitudeKey)) {
-          shared_.confirmedAltitudeM = savedAltitude;
+      // Unless it has other settings than ours, as after a factory reset.
+      if (remembered(pack(config_.altitudeM, config_.co2SelfCalibration))) {
+        Serial.println("Sensor was already measuring; continuing");
+        applyTemperatureOffset();
+        startedMs_ = millis();
+        {
+          Lock lock(mutex_);
+          shared_.measuringSinceMs = startedMs_;
+          shared_.confirmedAltitudeM = config_.altitudeM;
         }
+        setState(SensorState::Measuring);
+        return true;
       }
-      setState(SensorState::Measuring);
-      return true;
+      Serial.println("Sensor was measuring with other settings; restarting it");
+      sen_.stopMeasurement();
     }
   }
 
   // Altitude and CO2 self-calibration can only be set while idle. The sensor
   // forgets both when it loses power, so they're set at every start.
+  forgetSettings();
   int16_t error = sen_.setSensorAltitude(config_.altitudeM);
+  bool confirmed = false;
   if (error == 0) {
     vTaskDelay(pdMS_TO_TICKS(20));
-    uint16_t confirmed = 0;
-    if (sen_.getSensorAltitude(confirmed) == 0) {
-      Serial.printf("Sensor altitude set to %u m\n", confirmed);
-      savedAltitude = confirmed;
-      savedAltitudeCheck = confirmed ^ kSavedAltitudeKey;
+    uint16_t altitude = 0;
+    if (sen_.getSensorAltitude(altitude) == 0) {
+      Serial.printf("Sensor altitude set to %u m\n", altitude);
+      confirmed = altitude == config_.altitudeM;
       Lock lock(mutex_);
-      shared_.confirmedAltitudeM = confirmed;
+      shared_.confirmedAltitudeM = altitude;
     }
     error = sen_.setCo2SensorAutomaticSelfCalibration(config_.co2SelfCalibration ? 1 : 0);
     vTaskDelay(pdMS_TO_TICKS(20));  // execution time; the driver doesn't wait here
   }
+  if (error == 0 && confirmed) remember(pack(config_.altitudeM, config_.co2SelfCalibration));
   if (error == 0) error = sen_.startContinuousMeasurement();
   if (error != 0) {
     Lock lock(mutex_);

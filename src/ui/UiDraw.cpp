@@ -608,6 +608,14 @@ void Ui::drawNetwork() {
       footer("D1: add a network with a phone");
       break;
     default: {
+      if (w.failedSsid()[0] != '\0') {
+        line("Couldn't join", theme::kMuted);
+        line(w.failedSsid(), theme::kText);
+        line(w.failedReason(), theme::kText);
+        line("Trying again now and then", theme::kMuted);
+        footer("D1: set up Wi-Fi with a phone");
+        break;
+      }
       line("No saved network in range", theme::kText);
       String names = "Saved: ";
       for (size_t i = 0; i < w.saved().size(); ++i) {

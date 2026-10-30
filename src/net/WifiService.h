@@ -54,6 +54,11 @@ class WifiService {
   int8_t rssi() const;
   IPAddress ip() const;
 
+  // A saved network that was in range but couldn't be joined (e.g. its password
+  // changed), and why; empty when none was in range or one was joined.
+  const char* failedSsid() const { return failedSsid_; }
+  const char* failedReason() const { return failedReason_; }
+
   const WifiStore& saved() const { return store_; }
   // Saves a network without trying it first (web page, while connected).
   void save(const WifiCredentials& network);
@@ -121,6 +126,8 @@ class WifiService {
   // Set by the Wi-Fi event task when a connection attempt fails.
   std::atomic<uint8_t> lastReason_{0};
   std::atomic<uint8_t> failures_{0};
+  char failedSsid_[33] = "";
+  const char* failedReason_ = "";
 
   // Scanning.
   bool scanning_ = false;
