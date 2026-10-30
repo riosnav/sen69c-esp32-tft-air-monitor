@@ -33,7 +33,6 @@ const lgfx::IFont* const kMedium = &fonts::DejaVu18;
 const lgfx::IFont* const kLarge = &fonts::DejaVu24;
 const lgfx::IFont* const kHuge = &fonts::DejaVu40;
 
-// In the order of Ui::Item.
 // In Ui::Item order.
 constexpr const char* kItemLabels[] = {
     "Brightness",   "Dim after",    "Units",          "Status LED",
@@ -101,6 +100,13 @@ Scale scaleOf(Metric m) {
     default:
       return {0, 1, 1};
   }
+}
+
+// String(value, decimals) pads to decimals + 2 characters, which puts a space
+// before whole numbers with one digit (" 1"); this doesn't.
+String number(float value, unsigned int decimals) {
+  if (decimals > 0 || !std::isfinite(value)) return String(value, decimals);
+  return String(std::lround(value));
 }
 
 String duration(uint32_t ms) {
@@ -521,8 +527,8 @@ void Ui::drawChart(const Ring& ring, Metric metric, int x0, int y0, int x1, int 
 
   frame_.setFont(kSmall);
   const int decimals = hi - lo < 10 ? 1 : 0;
-  drawRich(frame_, String(hi, decimals).c_str(), x0 + 3, y0 + 10, theme::kMuted);
-  drawRich(frame_, String(lo, decimals).c_str(), x0 + 3, y1 - 3, theme::kMuted);
+  drawRich(frame_, number(hi, decimals).c_str(), x0 + 3, y0 + 10, theme::kMuted);
+  drawRich(frame_, number(lo, decimals).c_str(), x0 + 3, y1 - 3, theme::kMuted);
 }
 
 void Ui::drawDevice(uint32_t nowMs) {
@@ -559,7 +565,7 @@ void Ui::drawDevice(uint32_t nowMs) {
     if (std::isnan(s.batteryVolts)) {
       line("No battery monitor", theme::kMuted);
     } else {
-      line("Battery " + String(s.batteryVolts, 2) + " V, " + String(s.batteryPercent, 0) + " %",
+      line("Battery " + String(s.batteryVolts, 2) + " V, " + number(s.batteryPercent, 0) + " %",
            theme::kMuted);
     }
   }
@@ -922,10 +928,13 @@ void Ui::drawAlert() {
   drawRich(frame_, "Press any button", x + 8, y + 104, theme::kMuted);
 }
 
+// Over the title bar: the one band every screen has in the same place, so the
+// message never cuts through a row. It ends above the line under the title,
+// and above the first row of a QR code.
 void Ui::drawToast() {
-  frame_.fillRect(kLeft - 2, 116, kRight - kLeft + 4, 19, theme::kFaint);
+  frame_.fillRect(kLeft - 2, 0, kRight - kLeft + 4, 17, theme::kFaint);
   frame_.setFont(kBody);
-  drawRich(frame_, toast_, kLeft + 2, 130, theme::kText);
+  drawRich(frame_, toast_, kLeft + 2, kTitleBaseline, theme::kText);
 }
 
 float Ui::displayValue(Metric metric, float value) const {
@@ -937,14 +946,14 @@ String Ui::valueText(Metric metric, float value) const {
   value = displayValue(metric, value);
   switch (metric) {
     case Metric::Temperature:
-      return String(value, 1);
+      return number(value, 1);
     case Metric::Humidity:
     case Metric::Co2:
     case Metric::Voc:
     case Metric::Nox:
-      return String(value, 0);
+      return number(value, 0);
     default:  // particles and formaldehyde
-      return String(value, value < 100 ? 1 : 0);
+      return number(value, value < 100 ? 1 : 0);
   }
 }
 
