@@ -10,7 +10,7 @@ only, without sound, and it is not a smoke or carbon monoxide alarm.
 ![The monitor's main screen: CO₂ and PM2.5 in large digits, the other gases below them, then temperature and
 humidity, all in green](docs/screen.png)
 
-> **Status:** working (version 0.3.0) and still being developed.
+> **Status:** version 1.0.0.
 >
 > **Made with AI:** the code and documentation were written by an AI, Anthropic's Claude, working in Claude Code.
 > The author set the requirements, made the design decisions and tested the monitor on the real hardware.
@@ -69,8 +69,8 @@ no drivers are needed.
 The Feather's three buttons beside the screen are **D0**, **D1** and **D2**: holding the board with them on the
 left, D0 is the top one. Its **Reset** button is a separate small button; the board has one on each side.
 
-1. **Get the code.** On this project's GitHub page click **Code → Download ZIP** and unzip it, or clone it with
-   git. You get a folder called `sen69c-air-monitor` (from the ZIP: `sen69c-air-monitor-main`; if you find a folder
+1. **Get the code.** On [this project's GitHub page](https://github.com/riosnav/sen69c-air-monitor) click
+   **Code → Download ZIP** and unzip it, or clone it with git. You get a folder called `sen69c-air-monitor` (from the ZIP: `sen69c-air-monitor-main`; if you find a folder
    inside a folder, use the inner one, which contains `platformio.ini`). Put it somewhere that isn't synced by
    OneDrive, iCloud or Dropbox (for example `C:\Projects` on Windows): the build writes hundreds of MB of files,
    and syncing them can make builds fail.
