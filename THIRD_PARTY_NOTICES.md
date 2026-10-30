@@ -8,7 +8,7 @@ texts ship with each component's source, which the build downloads; release bina
 |---|---|---|---|
 | Arduino-ESP32 core | 3.3.11 | LGPL-2.1 | <https://github.com/espressif/arduino-esp32> |
 | ESP-IDF (inside the Arduino core) | 5.5.5 | Apache-2.0, with closed-source binary radio/PHY libraries under Espressif's license | <https://github.com/espressif/esp-idf> |
-| &nbsp;&nbsp;of which: HTTP server, mDNS, OTA | 5.5.5 | Apache-2.0 | (part of ESP-IDF; mDNS from <https://github.com/espressif/esp-protocols>) |
+| &nbsp;&nbsp;of which: HTTP server, MQTT client, mDNS, OTA | 5.5.5 | Apache-2.0 | (part of ESP-IDF; MQTT client from <https://github.com/espressif/esp-mqtt>, mDNS from <https://github.com/espressif/esp-protocols>) |
 | &nbsp;&nbsp;lwIP TCP/IP stack | | BSD-3-Clause | (part of ESP-IDF) |
 | &nbsp;&nbsp;Mbed TLS | | Apache-2.0 | (part of ESP-IDF) |
 | &nbsp;&nbsp;wpa_supplicant | | BSD-3-Clause | (part of ESP-IDF) |

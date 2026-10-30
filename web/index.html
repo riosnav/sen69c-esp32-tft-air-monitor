@@ -145,6 +145,21 @@ footer { color: var(--muted); font-size: 12px; margin-top: 30px; }
   </details>
 
   <details class="card">
+    <summary>Home Assistant</summary>
+    <p id="mqtt-status"></p>
+    <p class="hint">Sends the readings every 30 s to Home Assistant through an MQTT broker, such as its Mosquitto add-on. The monitor then appears in Home Assistant by itself, as a device with a sensor for each value.</p>
+    <form id="mqtt">
+      <label class="check"><input type="checkbox" name="enabled"> Send readings to Home Assistant</label>
+      <label>Broker address <input type="text" name="host" maxlength="64" placeholder="homeassistant.local or an IP address" autocapitalize="none" spellcheck="false"></label>
+      <label>Port <input type="number" name="port" min="1" max="65535"></label>
+      <label>User name <input type="text" name="user" maxlength="64" autocapitalize="none" autocomplete="off" spellcheck="false"></label>
+      <label>Password <input type="password" name="password" maxlength="64" autocomplete="new-password"></label>
+      <button class="primary">Save</button>
+      <p id="mqtt-msg" class="msg"></p>
+    </form>
+  </details>
+
+  <details class="card">
     <summary>Maintenance</summary>
     <div class="task">
       <div><strong>Clean the fan</strong><p class="hint">Full speed for 10 s; readings pause for about 40 s. The sensor also does this weekly by itself.</p></div>
@@ -445,6 +460,8 @@ function renderState() {
   if (sensor.altitude != null) rows.push(['Altitude for CO₂', `${sensor.altitude} m, confirmed by the sensor`]);
   if (s.battery) rows.push(['Battery', `${s.battery.volts.toFixed(2)} V, ${s.battery.percent ?? '?'} %`]);
   rows.push(['Wi-Fi', s.wifi.ssid ? `${s.wifi.ssid}, ${s.wifi.rssi} dBm` : 'not connected']);
+  if (s.mqtt.state !== 'off') rows.push(['Home Assistant', mqttText(s.mqtt)]);
+  $('#mqtt-status').textContent = `Status: ${mqttText(s.mqtt)}.`;
   rows.push(['Address', `${s.host}.local`]);
   rows.push(['Firmware', `v${s.version}, running for ${duration(s.uptime)}`]);
   $('#device').replaceChildren(...rows.flatMap(([term, value]) => {
@@ -763,6 +780,37 @@ $('#add-network').addEventListener('submit', async (e) => {
   }
 });
 
+// ---------------------------------------------------------------- Home Assistant
+
+const MQTT_STATES = { off: 'off', waiting: 'waiting for Wi-Fi', connecting: 'connecting…', connected: 'connected' };
+const mqttText = (m) => (m.state === 'failed' ? `${m.error}; trying again` : MQTT_STATES[m.state]);
+
+async function loadMqtt() {
+  const m = await request('/api/mqtt');
+  const f = $('#mqtt').elements;
+  f.enabled.checked = m.enabled;
+  f.host.value = m.host;
+  f.port.value = m.port;
+  f.user.value = m.user;
+  f.password.value = '';
+  f.password.placeholder = m.passwordSet ? 'unchanged' : '';
+  $('#mqtt-status').textContent = `Status: ${mqttText(m)}.`;
+}
+
+$('#mqtt').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.target.elements;
+  const body = { enabled: f.enabled.checked, host: f.host.value.trim(), port: Number(f.port.value), user: f.user.value.trim() };
+  if (f.password.value) body.password = f.password.value;
+  try {
+    await post('/api/mqtt', body);
+    message('mqtt-msg', 'Saved.');
+    loadMqtt();
+  } catch (err) {
+    message('mqtt-msg', err.message, true);
+  }
+});
+
 // ---------------------------------------------------------------- maintenance
 
 async function action(body, done) {
@@ -867,6 +915,7 @@ selectMetric('co2', false);
 poll();
 loadSettings().catch(() => {});
 loadWifi().catch(() => {});
+loadMqtt().catch(() => {});
 </script>
 </body>
 </html>

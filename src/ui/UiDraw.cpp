@@ -600,6 +600,20 @@ void Ui::drawNetwork() {
                                   ? String("Web password  ") + settings_->webPassword
                                   : String("No web password");
       line(password.c_str(), theme::kMuted);
+      switch (mqtt_->state()) {
+        case MqttState::Connected:
+          line("Home Assistant connected", theme::kMuted);
+          break;
+        case MqttState::Failed:
+          line((String("HA: ") + mqtt_->error()).c_str(), theme::kWarning);
+          break;
+        case MqttState::Connecting:
+        case MqttState::Waiting:
+          line("Connecting to Home Assistant", theme::kMuted);
+          break;
+        case MqttState::Off:
+          break;
+      }
       footer("D1: QR code to open the web page");
       break;
     }

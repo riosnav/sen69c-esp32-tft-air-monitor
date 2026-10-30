@@ -30,6 +30,11 @@ Settings load() {
     if (p.isKey("name")) p.getString("name", s.name, sizeof s.name);
     hasPassword = p.isKey("webPass");
     if (hasPassword) p.getString("webPass", s.webPassword, sizeof s.webPassword);
+    s.mqttEnabled = p.getBool("mqtt", s.mqttEnabled);
+    if (p.isKey("mqttHost")) p.getString("mqttHost", s.mqttHost, sizeof s.mqttHost);
+    s.mqttPort = p.getUShort("mqttPort", s.mqttPort);
+    if (p.isKey("mqttUser")) p.getString("mqttUser", s.mqttUser, sizeof s.mqttUser);
+    if (p.isKey("mqttPass")) p.getString("mqttPass", s.mqttPassword, sizeof s.mqttPassword);
     p.end();
   }
   if (!hasPassword) {
@@ -54,6 +59,11 @@ void save(const Settings& s) {
   p.putBool("wifi", s.wifiEnabled);
   p.putString("name", s.name);
   p.putString("webPass", s.webPassword);
+  p.putBool("mqtt", s.mqttEnabled);
+  p.putString("mqttHost", s.mqttHost);
+  p.putUShort("mqttPort", s.mqttPort);
+  p.putString("mqttUser", s.mqttUser);
+  p.putString("mqttPass", s.mqttPassword);
   p.end();
 }
 

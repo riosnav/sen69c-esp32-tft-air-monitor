@@ -18,6 +18,7 @@
 #include "AppLock.h"
 #include "Device.h"
 #include "System.h"
+#include "net/Json.h"
 #include "ui/Ui.h"
 #include "web/WebAssets.h"
 
@@ -31,16 +32,9 @@ namespace {
 constexpr size_t kMaxBodyBytes = 2048;
 constexpr size_t kOtaChunkBytes = 4096;
 constexpr int kRecvRetries = 5;
-// Decimal places sent for each metric, in the order of aq::Metric.
-constexpr int kDecimals[aq::kMetricCount] = {1, 1, 1, 1, 0, 1, 0, 0, 2, 1};
 
 Context ctx;
 httpd_handle_t server = nullptr;
-
-struct JsonDeleter {
-  void operator()(cJSON* json) const { cJSON_Delete(json); }
-};
-using Json = std::unique_ptr<cJSON, JsonDeleter>;
 
 // ---------------------------------------------------------------- helpers
 
@@ -100,6 +94,26 @@ const char* setupStateId(SetupState state) {
   }
 }
 
+const char* mqttStateId(MqttState state) {
+  switch (state) {
+    case MqttState::Waiting:
+      return "waiting";
+    case MqttState::Connecting:
+      return "connecting";
+    case MqttState::Connected:
+      return "connected";
+    case MqttState::Failed:
+      return "failed";
+    default:
+      return "off";
+  }
+}
+
+void addMqttState(cJSON* object, const MqttService& mqtt) {
+  cJSON_AddStringToObject(object, "state", mqttStateId(mqtt.state()));
+  cJSON_AddStringToObject(object, "error", mqtt.error());
+}
+
 const char* ledId(LedMode mode) {
   return mode == LedMode::Off ? "off" : mode == LedMode::Dim ? "dim" : "bright";
 }
@@ -112,20 +126,6 @@ bool metricFromId(const char* id, Metric& out) {
     }
   }
   return false;
-}
-
-// Rounded, so the JSON doesn't carry float noise such as 23.100000381.
-double rounded(float value, int decimals) {
-  const double scale = std::pow(10.0, decimals);
-  return std::round(value * scale) / scale;
-}
-
-void addNumber(cJSON* object, const char* key, float value, int decimals) {
-  if (std::isnan(value)) {
-    cJSON_AddNullToObject(object, key);
-  } else {
-    cJSON_AddNumberToObject(object, key, rounded(value, decimals));
-  }
 }
 
 // [low, high] limits, null where a side has none.
@@ -147,13 +147,11 @@ const char* stringField(const cJSON* object, const char* key) {
 }
 
 esp_err_t sendJson(httpd_req_t* req, const cJSON* json) {
-  char* text = cJSON_PrintUnformatted(json);
-  if (text == nullptr) return httpd_resp_send_500(req);
+  const JsonText text(cJSON_PrintUnformatted(json));
+  if (!text) return httpd_resp_send_500(req);
   httpd_resp_set_type(req, "application/json");
   httpd_resp_set_hdr(req, "Cache-Control", "no-store");
-  const esp_err_t err = httpd_resp_sendstr(req, text);
-  cJSON_free(text);
-  return err;
+  return httpd_resp_sendstr(req, text.get());
 }
 
 esp_err_t sendText(httpd_req_t* req, const char* status, const char* text) {
@@ -311,7 +309,7 @@ esp_err_t getState(httpd_req_t* req) {
     for (size_t i = 0; i < aq::kMetricCount; ++i) {
       const Metric m = static_cast<Metric>(i);
       cJSON* item = cJSON_AddObjectToObject(metrics, aq::metricId(m));
-      addNumber(item, "value", s.measurement[m], kDecimals[i]);
+      addNumber(item, "value", s.measurement[m], aq::kMetricDecimals[i]);
       cJSON_AddStringToObject(item, "level", levelId(air.level(m)));
       const aq::Thresholds& t = air.thresholds(m);
       cJSON_AddItemToObject(item, "warn", limits(t.warnLow, t.warnHigh));
@@ -350,6 +348,7 @@ esp_err_t getState(httpd_req_t* req) {
     cJSON* wifi = cJSON_AddObjectToObject(r, "wifi");
     cJSON_AddStringToObject(wifi, "ssid", ctx.wifi->ssid());
     cJSON_AddNumberToObject(wifi, "rssi", ctx.wifi->rssi());
+    addMqttState(cJSON_AddObjectToObject(r, "mqtt"), *ctx.mqtt);
   }
   return sendJson(req, r);
 }
@@ -387,7 +386,7 @@ esp_err_t getHistory(httpd_req_t* req) {
 
   httpd_resp_set_type(req, "application/json");
   httpd_resp_set_hdr(req, "Cache-Control", "no-store");
-  const int decimals = kDecimals[aq::idx(metric)];
+  const int decimals = aq::kMetricDecimals[aq::idx(metric)];
   char buffer[512];
   int n = snprintf(buffer, sizeof buffer, "{\"metric\":\"%s\",\"step\":%u,\"capacity\":%u,\"values\":[",
                    id, static_cast<unsigned>(step), static_cast<unsigned>(capacity));
@@ -653,6 +652,84 @@ esp_err_t postWifi(httpd_req_t* req) {
   return error ? badRequest(req, error) : sendOk(req);
 }
 
+// ---------------------------------------------------------------- Home Assistant
+
+void addMqtt(cJSON* r, const Settings& s, const MqttService& mqtt) {
+  cJSON_AddBoolToObject(r, "enabled", s.mqttEnabled);
+  cJSON_AddStringToObject(r, "host", s.mqttHost);
+  cJSON_AddNumberToObject(r, "port", s.mqttPort);
+  cJSON_AddStringToObject(r, "user", s.mqttUser);
+  cJSON_AddBoolToObject(r, "passwordSet", s.mqttPassword[0] != '\0');
+  addMqttState(r, mqtt);
+}
+
+esp_err_t getMqtt(httpd_req_t* req) {
+  Json root(cJSON_CreateObject());
+  {
+    AppLock lock;
+    addMqtt(root.get(), *ctx.settings, *ctx.mqtt);
+  }
+  return sendJson(req, root.get());
+}
+
+// Applies the fields present in `json` to `s`; returns what's wrong, if anything.
+const char* parseMqtt(const cJSON* json, Settings& s) {
+  const cJSON* f;
+  if ((f = field(json, "enabled"))) {
+    if (!cJSON_IsBool(f)) return "Enabled: true or false";
+    s.mqttEnabled = cJSON_IsTrue(f);
+  }
+  if ((f = field(json, "host"))) {
+    const char* host = cJSON_IsString(f) ? f->valuestring : nullptr;
+    if (host == nullptr || strlen(host) >= sizeof s.mqttHost || !printable(host) ||
+        strchr(host, ' ') != nullptr) {
+      return "Broker address: a name or IP address of up to 64 characters";
+    }
+    strlcpy(s.mqttHost, host, sizeof s.mqttHost);
+  }
+  if ((f = field(json, "port"))) {
+    if (!cJSON_IsNumber(f) || f->valuedouble < 1 || f->valuedouble > 65535) {
+      return "Port: 1 to 65535";
+    }
+    s.mqttPort = static_cast<uint16_t>(std::lround(f->valuedouble));
+  }
+  if ((f = field(json, "user"))) {
+    const char* user = cJSON_IsString(f) ? f->valuestring : nullptr;
+    if (user == nullptr || strlen(user) >= sizeof s.mqttUser || !printable(user)) {
+      return "User name: up to 64 plain ASCII characters";
+    }
+    strlcpy(s.mqttUser, user, sizeof s.mqttUser);
+  }
+  if ((f = field(json, "password"))) {
+    const char* password = cJSON_IsString(f) ? f->valuestring : nullptr;
+    if (password == nullptr || strlen(password) >= sizeof s.mqttPassword || !printable(password)) {
+      return "Password: up to 64 plain ASCII characters";
+    }
+    strlcpy(s.mqttPassword, password, sizeof s.mqttPassword);
+  }
+  if (s.mqttEnabled && s.mqttHost[0] == '\0') return "Enter the broker's address";
+  return nullptr;
+}
+
+esp_err_t postMqtt(httpd_req_t* req) {
+  if (!authorized(req)) return askForPassword(req);
+  const Json json = readJson(req);
+  if (!json) return badRequest(req, "Expected a JSON object");
+  Json reply(cJSON_CreateObject());
+  const char* error;
+  {
+    AppLock lock;
+    Settings changed = *ctx.settings;
+    error = parseMqtt(json.get(), changed);
+    if (error == nullptr) {
+      *ctx.settings = changed;  // the MQTT client restarts with them
+      ctx.ui->settingsChanged();  // saves them
+      addMqtt(reply.get(), changed, *ctx.mqtt);
+    }
+  }
+  return error ? badRequest(req, error) : sendJson(req, reply.get());
+}
+
 // ---------------------------------------------------------------- firmware
 
 esp_err_t getAuth(httpd_req_t* req) {
@@ -717,6 +794,8 @@ bool begin(const Context& context) {
       {"/api/action", HTTP_POST, postAction, nullptr},
       {"/api/wifi", HTTP_GET, getWifi, nullptr},
       {"/api/wifi", HTTP_POST, postWifi, nullptr},
+      {"/api/mqtt", HTTP_GET, getMqtt, nullptr},
+      {"/api/mqtt", HTTP_POST, postMqtt, nullptr},
       {"/api/auth", HTTP_GET, getAuth, nullptr},
       {"/api/ota", HTTP_POST, postOta, nullptr},
   };

@@ -16,6 +16,7 @@
 #include "Lgfx.h"
 #include "Settings.h"
 #include "StatusLed.h"
+#include "net/MqttService.h"
 #include "net/Ota.h"
 #include "net/WifiService.h"
 #include "sensor/SensorService.h"
@@ -23,7 +24,8 @@
 class Ui {
  public:
   void begin(SensorService& sensor, Settings& settings, const aq::AirQuality& airQuality,
-             const aq::MetricHistory& history, WifiService& wifi, const Ota& ota);
+             const aq::MetricHistory& history, WifiService& wifi, const Ota& ota,
+             const MqttService& mqtt);
   // Call often from loop(); `snapshot` is the sensor's latest state.
   void update(const SensorSnapshot& snapshot, uint32_t nowMs);
   // The settings were changed elsewhere (web page): apply and save them.
@@ -124,6 +126,7 @@ class Ui {
   const aq::MetricHistory* history_ = nullptr;
   WifiService* wifi_ = nullptr;
   const Ota* ota_ = nullptr;
+  const MqttService* mqtt_ = nullptr;
   SensorSnapshot snapshot_;
   bool settingsChanged_ = false;
 

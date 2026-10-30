@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // SEN69C air-quality monitor: wires the sensor task, the air-quality logic,
-// the history, the UI, Wi-Fi and the web server together. Everything but the
-// network parts works offline.
+// the history, the UI, Wi-Fi, the web server and Home Assistant (MQTT)
+// together. Everything but the network parts works offline.
 
 #include <AirQuality.h>
 #include <Arduino.h>
@@ -14,6 +14,7 @@
 #include "AppLock.h"
 #include "Settings.h"
 #include "System.h"
+#include "net/MqttService.h"
 #include "net/Ota.h"
 #include "net/Web.h"
 #include "net/WifiService.h"
@@ -32,6 +33,7 @@ aq::AirQuality airQuality;
 aq::MetricHistory* history = nullptr;
 WifiService wifi;
 Ota ota;
+MqttService mqtt;
 Ui ui;
 
 // The history is ~72 KB: keep it in PSRAM and leave internal RAM for Wi-Fi.
@@ -42,6 +44,21 @@ aq::MetricHistory* createHistory() {
     memory = malloc(sizeof(aq::MetricHistory));
   }
   return new (memory) aq::MetricHistory();
+}
+
+const char* mqttText(MqttState state) {
+  switch (state) {
+    case MqttState::Waiting:
+      return "waiting";
+    case MqttState::Connecting:
+      return "connecting";
+    case MqttState::Connected:
+      return "connected";
+    case MqttState::Failed:
+      return "failing";
+    default:
+      return "off";
+  }
 }
 
 const char* wifiText(WifiState state) {
@@ -63,12 +80,12 @@ void logMeasurement(const SensorSnapshot& s) {
   const aq::Measurement& m = s.measurement;
   Serial.printf(
       "PM1 %.1f PM2.5 %.1f PM4 %.1f PM10 %.1f | CO2 %.0f HCHO %.1f VOC %.0f NOx %.0f | "
-      "T %.2f RH %.1f | air %s | wifi %s %d dBm | free RAM %u KB, PSRAM %u KB\n",
+      "T %.2f RH %.1f | air %s | wifi %s %d dBm | mqtt %s | free RAM %u KB, PSRAM %u KB\n",
       m[Metric::Pm1], m[Metric::Pm25], m[Metric::Pm4], m[Metric::Pm10], m[Metric::Co2],
       m[Metric::Hcho], m[Metric::Voc], m[Metric::Nox], m[Metric::Temperature],
       m[Metric::Humidity], kLevels[static_cast<int>(airQuality.overall())],
-      wifiText(wifi.state()), wifi.rssi(), heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024,
-      ESP.getFreePsram() / 1024);
+      wifiText(wifi.state()), wifi.rssi(), mqttText(mqtt.state()),
+      heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024, ESP.getFreePsram() / 1024);
 }
 
 }  // namespace
@@ -88,7 +105,8 @@ void setup() {
   sensor.begin(
       {userSettings.tempOffsetC, userSettings.altitudeM, userSettings.co2SelfCalibration});
   wifi.begin(userSettings);
-  ui.begin(sensor, userSettings, airQuality, *history, wifi, ota);
+  mqtt.begin(userSettings, wifi);
+  ui.begin(sensor, userSettings, airQuality, *history, wifi, ota, mqtt);
 }
 
 void loop() {
@@ -107,10 +125,12 @@ void loop() {
     }
     wifi.loop(now);
     if (!web::started() && wifi.networkStarted()) {
-      web::begin({&latest, &airQuality, history, &userSettings, &sensor, &wifi, &ota, &ui});
+      web::begin(
+          {&latest, &airQuality, history, &userSettings, &sensor, &wifi, &ota, &mqtt, &ui});
     }
     const bool offline = !userSettings.wifiEnabled || wifi.saved().size() == 0;
     ota.loop(wifi.state() == WifiState::Connected, offline, now);
+    mqtt.loop(latest, airQuality, now);
     ui.update(latest, now);
 
     if (now - lastLogMs >= kLogIntervalMs) {

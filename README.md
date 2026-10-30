@@ -5,7 +5,7 @@ Firmware for a small indoor air-quality monitor built from an
 a [Sensirion SEN69C](https://sensirion.com/products/catalog/SEN69C) environmental sensor and the
 [Adafruit SEN6x breakout](https://learn.adafruit.com/adafruit-sen6x-breakout).
 
-> **Status:** early development (milestone M2: Wi-Fi and web page). Home Assistant integration is next.
+> **Status:** early development (milestone M3: Home Assistant).
 
 ## Features
 
@@ -16,9 +16,8 @@ a [Sensirion SEN69C](https://sensirion.com/products/catalog/SEN69C) environmenta
 - Battery charge (Feather's MAX17048 gauge) when a LiPo is connected and *A battery is connected* is ticked on the web page; without a battery the gauge reads the charger and is ignored.
 - Wi-Fi setup from a phone, no reflashing: scan the QR code on the screen and pick your network. Up to five networks are saved; the monitor joins whichever is in range.
 - Local web page with live values (optionally with the sensor's tolerance), trend charts, settings, maintenance and firmware updates over Wi-Fi (with automatic rollback if an update fails).
+- Home Assistant integration through MQTT discovery: the monitor appears as a device with a sensor for every value.
 - Works fully offline; Wi-Fi is optional and everything stays on your network (no cloud).
-
-Planned: Home Assistant integration through MQTT auto-discovery.
 
 ## Using it
 
@@ -86,6 +85,28 @@ network, so don't reuse a valuable password.
 
 The web page also serves a small JSON API (`/api/state`, `/api/history?metric=co2&range=hour|day`,
 `/api/settings`, ...), documented at the top of [src/net/Web.h](src/net/Web.h).
+
+### Home Assistant
+
+The monitor can send its readings to Home Assistant through an MQTT broker. Home Assistant then lists it as a
+device with a sensor for every value, a *status* sensor (Good, Fair or Poor) for every value that has limits, the
+overall air quality and the Wi-Fi signal, without any YAML (MQTT discovery).
+
+1. In Home Assistant, install and start the **Mosquitto broker** add-on (*Settings → Add-ons → Add-on store*).
+2. Under *Settings → Devices & services*, add the **MQTT** integration it discovers.
+3. Create a user for the monitor: turn on *Advanced mode* in your profile, then *Settings → People → Users →
+   Add user* (not an administrator). Mosquitto accepts Home Assistant users.
+4. On the monitor's web page, open *Home Assistant*, tick *Send readings to Home Assistant* and enter the broker's
+   address (your Home Assistant's, e.g. `homeassistant.local` or its IP address), port 1883, and that user name and
+   password.
+
+The monitor's Wi-Fi page and the web page show whether it is connected. Readings are sent every 30 s; if the
+monitor loses power, Home Assistant shows its sensors as unavailable after about 90 s. Without the broker (e.g.
+on another network) the monitor and its web page work as usual and it keeps retrying in the background.
+
+For other MQTT tools, with `<host>` the monitor's host name (e.g. `airmonitor-a1b2`): `<host>/state` carries all the
+values as JSON, `<host>/status` is `online` or `offline`, and the discovery message is
+`homeassistant/device/<host>/config`.
 
 ### Firmware updates over Wi-Fi
 

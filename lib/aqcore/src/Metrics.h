@@ -34,6 +34,9 @@ constexpr const char* kMetricIds[kMetricCount] = {"pm1", "pm25", "pm4", "pm10", 
 
 constexpr const char* metricId(Metric m) { return kMetricIds[idx(m)]; }
 
+// Decimal places worth reporting (web API, MQTT), in the order of Metric.
+constexpr int kMetricDecimals[kMetricCount] = {1, 1, 1, 1, 0, 1, 0, 0, 2, 1};
+
 // One reading of every metric. NaN marks a value the sensor doesn't provide
 // yet (warm-up) or couldn't measure.
 struct Measurement {

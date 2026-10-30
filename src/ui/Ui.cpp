@@ -29,13 +29,15 @@ uint8_t backlight(uint8_t percent) { return static_cast<uint8_t>(percent * 255 /
 }  // namespace
 
 void Ui::begin(SensorService& sensor, Settings& settings, const aq::AirQuality& airQuality,
-               const aq::MetricHistory& history, WifiService& wifi, const Ota& ota) {
+               const aq::MetricHistory& history, WifiService& wifi, const Ota& ota,
+               const MqttService& mqtt) {
   sensor_ = &sensor;
   settings_ = &settings;
   aq_ = &airQuality;
   history_ = &history;
   wifi_ = &wifi;
   ota_ = &ota;
+  mqtt_ = &mqtt;
 
   for (size_t i = 0; i < 3; ++i) {
     pinMode(kButtonPins[i], kPressedLevel[i] == LOW ? INPUT_PULLUP : INPUT_PULLDOWN);

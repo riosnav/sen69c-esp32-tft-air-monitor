@@ -11,6 +11,7 @@
 //   GET  /api/settings  POST changes them *
 //   POST /api/action    clean fan, calibrate CO2, restart *
 //   GET  /api/wifi      POST: scan, connect, save, forget, finish *
+//   GET  /api/mqtt      Home Assistant broker settings and state; POST changes them *
 //   GET  /api/auth      204 if the request carries the web password
 //   POST /api/ota       firmware image as the body *
 //
@@ -22,6 +23,7 @@
 #include <History.h>
 
 #include "Settings.h"
+#include "net/MqttService.h"
 #include "net/Ota.h"
 #include "net/WifiService.h"
 #include "sensor/SensorService.h"
@@ -38,6 +40,7 @@ struct Context {
   SensorService* sensor;
   WifiService* wifi;
   Ota* ota;
+  const MqttService* mqtt;
   Ui* ui;  // told when the settings change
 };
 

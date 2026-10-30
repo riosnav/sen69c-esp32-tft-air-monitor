@@ -26,6 +26,12 @@ struct Settings {
   // Protects changes made from the web page; empty = no password. A random
   // one is generated on first start and shown on the device's Wi-Fi page.
   char webPassword[33] = "";
+  // Home Assistant, through an MQTT broker such as its Mosquitto add-on.
+  bool mqttEnabled = false;
+  char mqttHost[65] = "";  // name or IP address
+  uint16_t mqttPort = 1883;
+  char mqttUser[65] = "";
+  char mqttPassword[65] = "";
 };
 
 namespace settings {
