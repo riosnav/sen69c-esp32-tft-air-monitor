@@ -49,6 +49,10 @@ constexpr uint32_t kMaxConsecutiveErrors = 10;
 
 float scaled(uint16_t raw, float divisor) { return raw == kUnknownU16 ? NAN : raw / divisor; }
 float scaled(int16_t raw, float divisor) { return raw == kUnknownI16 ? NAN : raw / divisor; }
+// The VOC and NOx indices run from 1 to 500. For a while after a measurement
+// starts, the sensor reports 0 rather than unknown: its gas algorithm is
+// still starting up.
+float gasIndex(int16_t raw) { return raw < 10 ? NAN : scaled(raw, 10); }
 
 class Lock {
  public:
@@ -306,8 +310,8 @@ void SensorService::pollMeasurement() {
   }
   m[Metric::Humidity] = scaled(rh, 100);
   m[Metric::Temperature] = scaled(t, 200);
-  m[Metric::Voc] = scaled(voc, 10);
-  m[Metric::Nox] = scaled(nox, 10);
+  m[Metric::Voc] = gasIndex(voc);
+  m[Metric::Nox] = gasIndex(nox);
   m[Metric::Hcho] = scaled(hcho, 10);
   m[Metric::Co2] = scaled(co2, 1);
 
