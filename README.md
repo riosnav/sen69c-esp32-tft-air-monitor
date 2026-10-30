@@ -348,6 +348,16 @@ workspace_dir = C:/path/outside/the/synced/folder
 The firmware files (`firmware.bin`) are then under that folder instead of `.pio`. The tools themselves (about
 3.6 GB) live in `~/.platformio` and are not affected.
 
+## Disclaimer
+
+This project is provided "as is", without warranty of any kind, express or implied, including the warranties of
+merchantability and fitness for a particular purpose. You build and use it at your own risk. To the extent the law
+allows, the author accepts no liability for any damage, injury or loss arising from it, including from the
+hardware, a battery, or decisions based on its readings.
+
+The monitor is not a medical, safety or certified measuring device. Its readings can be wrong (for example while
+the sensor warms up, or if it fails), so don't rely on them where health or safety depends on it.
+
 ## License
 
 Copyright © 2026 Francisco de los Ríos.
@@ -355,5 +365,9 @@ Copyright © 2026 Francisco de los Ríos.
 This program is free software: you can redistribute it and/or modify it under the terms of the
 GNU General Public License as published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version. See [LICENSE](LICENSE).
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the
+implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+more details.
 
 Third-party components and their licenses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
