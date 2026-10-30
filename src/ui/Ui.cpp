@@ -16,6 +16,7 @@ constexpr uint8_t kDimmedBrightness = 4;  // of 255
 constexpr uint32_t kDrawIntervalMs = 250;
 constexpr uint32_t kToastMs = 4000;
 constexpr uint32_t kMenuTimeoutMs = 60000;
+constexpr uint32_t kAlertTimeoutMs = 60000;
 constexpr uint16_t kOutdoorCo2Ppm = 420;
 
 template <typename E>
@@ -103,10 +104,7 @@ void Ui::handleButton(size_t button, aq::ButtonEvent event, uint32_t nowMs) {
     return;
   }
   if (alertVisible_) {
-    if (event == ButtonEvent::Click) {
-      acknowledged_[aq::idx(alertMetric_)] = alertLevel_;
-      alertVisible_ = false;
-    }
+    if (event == ButtonEvent::Click) dismissAlert();
     return;
   }
   switch (mode_) {
@@ -328,9 +326,18 @@ void Ui::updateAlerts(uint32_t nowMs) {
   alertMetric_ = metric;
   alertLevel_ = level;
   if (isNew) {
+    alertShownMs_ = nowMs;
     lastInputMs_ = nowMs;  // wake the screen
     dirty_ = true;
   }
+  // Left alone, an alert closes by itself, as if dismissed.
+  if (alertVisible_ && nowMs - alertShownMs_ >= kAlertTimeoutMs) dismissAlert();
+}
+
+void Ui::dismissAlert() {
+  acknowledged_[aq::idx(alertMetric_)] = alertLevel_;
+  alertVisible_ = false;
+  dirty_ = true;
 }
 
 void Ui::updateBacklight(uint32_t nowMs) {

@@ -80,6 +80,7 @@ class Ui {
   void execute(Item item);
   void commitSettings();
   void updateAlerts(uint32_t nowMs);
+  void dismissAlert();
   void updateBacklight(uint32_t nowMs);
   void showToast(const char* text, uint32_t nowMs);
   bool warmingUp() const;
@@ -143,6 +144,7 @@ class Ui {
   bool alertVisible_ = false;
   aq::Metric alertMetric_ = aq::Metric::Co2;
   aq::Level alertLevel_ = aq::Level::Unknown;
+  uint32_t alertShownMs_ = 0;
 
   uint32_t lastInputMs_ = 0;
   bool dimmed_ = false;

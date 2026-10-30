@@ -10,7 +10,7 @@ a [Sensirion SEN69C](https://sensirion.com/products/catalog/SEN69C) environmenta
 ## Features
 
 - Shows PM1/2.5/4/10, CO₂, formaldehyde (HCHO), VOC and NOx indices, temperature and humidity on the built-in 240×135 screen.
-- Colour-coded levels and a pop-up alert (which also wakes the screen) when a value leaves the healthy range; the NeoPixel shows the overall air quality.
+- Colour-coded levels and a pop-up alert (which also wakes the screen, and closes by itself after a minute) when a value leaves the healthy range; the NeoPixel shows the overall air quality.
 - Trend graphs of the last hour and the last 24 hours for every value.
 - Settings menu: brightness, auto-dim, °C/°F, status LED; Wi-Fi on/off, setup and forgetting networks; temperature offset, altitude, CO₂ self-calibration, CO₂ recalibration, fan cleaning; restart, factory reset. Settings survive restarts and power cuts. (The sensor itself forgets the altitude, temperature offset and self-calibration setting when it loses power, so the firmware sends them again every time it starts.)
 - Battery charge (Feather's MAX17048 gauge) when a LiPo is connected and *A battery is connected* is ticked on the web page; without a battery the gauge reads the charger and is ignored.
