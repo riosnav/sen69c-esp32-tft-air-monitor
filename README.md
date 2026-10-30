@@ -78,8 +78,8 @@ Notes:
 - The setup hotspot has a random password, shown on the screen, and closes after use or after 10 minutes.
 
 The web page shows the readings, trend charts and device status to anyone on your network. Changing settings,
-maintenance and firmware updates need the **web password**, shown on the monitor's Wi-Fi page (the browser asks
-for it; any user name works). A random one is created on first start; it can be changed or removed on the web
+maintenance and firmware updates need the **web password**, shown on the monitor's Wi-Fi page (the page asks for
+it once per browser tab). A random one is created on first start; it can be changed or removed on the web
 page, and a factory reset creates a new one. The connection is plain HTTP, as is usual for devices on a home
 network, so don't reuse a valuable password.
 

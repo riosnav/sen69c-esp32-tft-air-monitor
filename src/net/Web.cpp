@@ -259,7 +259,12 @@ bool authorized(httpd_req_t* req) {
 }
 
 esp_err_t askForPassword(httpd_req_t* req) {
-  httpd_resp_set_hdr(req, "WWW-Authenticate", "Basic realm=\"Air Monitor\", charset=\"UTF-8\"");
+  // The web page asks for the password itself (the browser's prompt would also
+  // ask for a user name) and marks its requests; anything else, such as curl
+  // or a browser opening the API directly, gets the usual Basic prompt.
+  if (httpd_req_get_hdr_value_len(req, "X-Requested-With") == 0) {
+    httpd_resp_set_hdr(req, "WWW-Authenticate", "Basic realm=\"Air Monitor\", charset=\"UTF-8\"");
+  }
   return sendText(req, "401 Unauthorized",
                   "This needs the web password shown on the monitor's Wi-Fi page.");
 }

@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>Air Monitor</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%233ccd6e'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%238b9099'/%3E%3C/svg%3E">
 <style>
 :root {
   --bg: #f3f4f6; --card: #fff; --text: #16181d; --muted: #646a73; --line: #e1e4e8;
@@ -71,6 +71,12 @@ ul.saved li { display: flex; align-items: center; justify-content: space-between
 .task:last-of-type { border-bottom: 0; }
 .task p { margin: 2px 0 0; }
 progress { width: 100%; max-width: 360px; }
+dialog { width: min(340px, calc(100vw - 32px)); background: var(--card); color: var(--text); border: 1px solid var(--line);
+  border-radius: 12px; padding: 16px 18px; }
+dialog::backdrop { background: rgba(0, 0, 0, .45); }
+dialog p { margin: 0 0 10px; }
+dialog .hint.bad { color: var(--alarm); }
+dialog .row { margin-top: 14px; }
 footer { color: var(--muted); font-size: 12px; margin-top: 30px; }
 </style>
 </head>
@@ -97,7 +103,7 @@ footer { color: var(--muted); font-size: 12px; margin-top: 30px; }
   <div class="card"><dl id="device"></dl></div>
 
   <h2>Settings</h2>
-  <p class="hint">Changes ask for the web password shown on the monitor's Wi-Fi page (any user name).</p>
+  <p class="hint">Changes ask for the web password shown on the monitor's Wi-Fi page.</p>
 
   <details class="card">
     <summary>Display and sensor</summary>
@@ -190,6 +196,14 @@ footer { color: var(--muted); font-size: 12px; margin-top: 30px; }
   <footer>SEN69C Air Monitor &middot; free software under the GNU GPL v3 or later</footer>
 </div>
 <div id="tip" role="tooltip" hidden></div>
+<dialog id="login">
+  <form method="dialog">
+    <p><strong>Web password</strong></p>
+    <p id="login-hint" class="hint"></p>
+    <input type="password" name="password" maxlength="32" autocomplete="current-password" aria-label="Web password">
+    <div class="row"><button class="primary" value="ok">OK</button><button class="plain" value="cancel">Cancel</button></div>
+  </form>
+</dialog>
 <script>
 'use strict';
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -294,17 +308,71 @@ function toleranceOf(m, v) {
 }
 const formatTolerance = (t) => '±' + Number(t.toPrecision(2));
 
-async function request(path, options) {
-  const response = await fetch(path, options);
+// ---------------------------------------------------------------- requests
+
+// The web password. The page asks for it itself, since the browser's own prompt
+// would also ask for a user name, which doesn't matter; kept for this tab.
+let webPassword = null;
+try {
+  webPassword = sessionStorage.getItem('webPassword');
+} catch (e) { /* asked for again */ }
+
+function rememberPassword(password) {
+  webPassword = password;
+  try {
+    if (password === null) sessionStorage.removeItem('webPassword');
+    else sessionStorage.setItem('webPassword', password);
+  } catch (e) { /* asked for again */ }
+}
+
+// X-Requested-With tells the monitor not to make the browser prompt for a password.
+function apiHeaders(extra = {}) {
+  const headers = { 'X-Requested-With': 'fetch', ...extra };
+  if (webPassword !== null) {
+    const bytes = new TextEncoder().encode(':' + webPassword);
+    headers.Authorization = 'Basic ' + btoa(String.fromCharCode(...bytes));
+  }
+  return headers;
+}
+
+async function request(path, options = {}) {
+  const response = await fetch(path, { ...options, headers: apiHeaders(options.headers) });
   const text = await response.text();
   if (!response.ok) throw new Error(text || `${response.status} ${response.statusText}`);
   return text && (response.headers.get('Content-Type') || '').includes('json') ? JSON.parse(text) : text;
 }
 
-// Asking /api/auth first makes the browser prompt for the web password (once)
-// before anything is sent.
+// Resolves to the password entered, or null if cancelled.
+function askPassword(wrong) {
+  const dialog = $('#login');
+  const input = $('input', dialog);
+  const hint = $('#login-hint');
+  hint.textContent = wrong ? 'Wrong password. It is shown on the monitor’s Wi-Fi page.' : 'Shown on the monitor’s Wi-Fi page.';
+  hint.classList.toggle('bad', wrong);
+  input.value = '';
+  dialog.returnValue = '';
+  dialog.showModal();
+  return new Promise((resolve) => {
+    dialog.addEventListener('close', () => resolve(dialog.returnValue === 'ok' ? input.value : null), { once: true });
+  });
+}
+
+// Makes sure the page has the web password, if one is set, asking for it as needed.
+async function authorize() {
+  let wrong = false;
+  for (;;) {
+    const response = await fetch('/api/auth', { headers: apiHeaders() });
+    if (response.ok) return;
+    if (response.status !== 401) throw new Error(`${response.status} ${response.statusText}`);
+    const entered = await askPassword(wrong);
+    if (entered === null) throw new Error('Not sent: this needs the web password.');
+    rememberPassword(entered);
+    wrong = true;
+  }
+}
+
 async function post(path, body) {
-  await request('/api/auth');
+  await authorize();
   return request(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 }
 
@@ -431,6 +499,17 @@ document.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideInfo(); });
 window.addEventListener('scroll', hideInfo, { passive: true });
 
+// The tab's icon: a dot in the colour of the overall air quality.
+const FAVICON_COLORS = { good: '#3ccd6e', warning: '#ffb000', alarm: '#f54236', unknown: '#8b9099' };
+let faviconLevel = 'unknown';
+
+function setFavicon(level) {
+  if (level === faviconLevel) return;
+  faviconLevel = level;
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='7' fill='${FAVICON_COLORS[level]}'/></svg>`;
+  $('link[rel=icon]').href = 'data:image/svg+xml,' + encodeURIComponent(svg);
+}
+
 function renderState() {
   const s = state;
   document.title = s.name;
@@ -438,6 +517,7 @@ function renderState() {
   const pill = $('#overall');
   pill.textContent = LEVELS[s.overall];
   pill.style.background = `var(--${s.overall})`;
+  setFavicon(s.overall);
   for (const m of METRICS) {
     const d = s.metrics[m.id];
     const card = $('#card-' + m.id);
@@ -483,6 +563,7 @@ async function poll() {
     if (stale) loadChart(); else drawChart();
   } catch (e) {
     $('#offline').hidden = false;
+    setFavicon('unknown');
   }
   setTimeout(poll, 5000);
 }
@@ -728,6 +809,7 @@ $('#settings').addEventListener('submit', async (e) => {
   else if (f.newPassword.value) body.webPassword = f.newPassword.value;
   try {
     await post('/api/settings', body);
+    if (body.webPassword !== undefined) rememberPassword(body.webPassword || null);
     f.newPassword.value = '';
     f.noPassword.checked = false;
     message('settings-msg', 'Saved.');
@@ -840,7 +922,7 @@ $('#upload').addEventListener('click', async () => {
   const file = $('#firmware').files[0];
   if (!file) return message('ota-msg', 'Choose a firmware.bin file first.', true);
   try {
-    await request('/api/auth');
+    await authorize();
   } catch (err) {
     return message('ota-msg', err.message, true);
   }
@@ -850,6 +932,7 @@ $('#upload').addEventListener('click', async () => {
   message('ota-msg', 'Uploading…');
   const xhr = new XMLHttpRequest();
   xhr.open('POST', '/api/ota');
+  for (const [name, value] of Object.entries(apiHeaders())) xhr.setRequestHeader(name, value);
   xhr.upload.addEventListener('progress', (e) => { if (e.lengthComputable) bar.value = e.loaded / e.total; });
   xhr.addEventListener('load', () => {
     if (xhr.status === 200) {
