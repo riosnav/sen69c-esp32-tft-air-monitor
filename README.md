@@ -7,6 +7,9 @@ screen with green, amber and red levels, and warns you when the air gets unhealt
 and can send everything to Home Assistant; without Wi-Fi it works just the same. Its warnings are on the screen
 only, without sound, and it is not a smoke or carbon monoxide alarm.
 
+![The monitor's main screen: CO₂ and PM2.5 in large digits, the other gases below them, then temperature and
+humidity, all in green](docs/screen.png)
+
 > **Status:** working (version 0.3.0) and still being developed.
 
 ## Features
@@ -221,6 +224,9 @@ it once per browser tab). A random one is created on first start; it can be chan
 and a factory reset creates a new one. The connection is plain HTTP, as is usual for devices on a home network, so
 don't reuse a valuable password.
 
+![The web page: a card per value with its accuracy, and a trend chart of the last hour with the sensor's
+tolerance as a shaded band](docs/web-page.png)
+
 The web page is served by the monitor itself, so it also works on networks without Home Assistant, e.g. when you
 take the monitor elsewhere.
 
@@ -230,6 +236,9 @@ The monitor can send its readings to [Home Assistant](https://www.home-assistant
 small message server). Home Assistant then lists it as a device with a sensor for every value, a *status* sensor
 (Good, Fair or Poor) for every value that has limits, the overall air quality and the Wi-Fi signal, without any
 YAML (it uses Home Assistant's MQTT discovery).
+
+![The monitor's device page in Home Assistant: device info with a link to the web page, and the sensors, each value
+followed by its status](docs/home-assistant.png)
 
 1. In Home Assistant, install and start the **Mosquitto broker** app from *Settings → Apps* (called *Add-ons*
    before Home Assistant 2026.2). If your Home Assistant runs in Docker ("Container") it has no apps: run a
