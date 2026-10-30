@@ -42,6 +42,7 @@ class Ui {
     Device,
     Count
   };
+  // Menu order, grouped: display, Wi-Fi, sensor, device.
   enum class Item : uint8_t {
     Brightness,
     DimAfter,
@@ -49,12 +50,12 @@ class Ui {
     Led,
     Wifi,
     WifiSetup,
+    ForgetWifi,
     TempOffset,
     Altitude,
     Co2SelfCalibration,
-    CleanFan,
     CalibrateCo2,
-    ForgetWifi,
+    CleanFan,
     Restart,
     FactoryReset,
     Close,

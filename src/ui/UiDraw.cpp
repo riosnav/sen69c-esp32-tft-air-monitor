@@ -34,10 +34,11 @@ const lgfx::IFont* const kLarge = &fonts::DejaVu24;
 const lgfx::IFont* const kHuge = &fonts::DejaVu40;
 
 // In the order of Ui::Item.
+// In Ui::Item order.
 constexpr const char* kItemLabels[] = {
-    "Brightness",   "Dim after", "Units",     "Status LED",
-    "Wi-Fi",        "Set up Wi-Fi", "Temp. offset", "Altitude",
-    "CO_2 self-calibration", "Clean fan", "Calibrate CO_2", "Forget Wi-Fi",
+    "Brightness",   "Dim after",    "Units",          "Status LED",
+    "Wi-Fi",        "Set up Wi-Fi", "Forget Wi-Fi",
+    "Temp. offset", "Altitude",     "CO_2 self-calibration", "Calibrate CO_2", "Clean fan",
     "Restart",      "Factory reset", "Close",
 };
 
