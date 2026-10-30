@@ -41,7 +41,7 @@ h2 { font-size: 16px; margin: 26px 0 10px; }
 label.small { font-size: 13px; color: var(--muted); margin: 0; }
 .metric .label { color: var(--muted); font-size: 13px; }
 .metric .value { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.metric .unit { color: var(--muted); font-size: 13px; margin-left: 4px; }
+.metric .unit { display: inline-block; white-space: nowrap; color: var(--muted); font-size: 13px; margin-left: 4px; }
 .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .seg button { border: 0; background: none; color: var(--text); padding: 7px 12px; font: inherit; cursor: pointer; }
@@ -87,6 +87,7 @@ footer { color: var(--muted); font-size: 12px; margin-top: 30px; }
       <select id="chart-metric" aria-label="Value shown"></select>
       <span class="seg"><button type="button" data-range="hour" class="on">1 hour</button><button type="button" data-range="day">24 hours</button></span>
       <label class="check small"><input type="checkbox" id="jump"> Jump here when a value is clicked</label>
+      <label class="check small"><input type="checkbox" id="tolerance"> Show the sensor's tolerance (&plusmn;)</label>
     </div>
     <canvas id="chart"></canvas>
     <div id="chart-stats" class="stats"></div>
@@ -178,17 +179,21 @@ footer { color: var(--muted); font-size: 12px; margin-top: 30px; }
 'use strict';
 const $ = (selector, root = document) => root.querySelector(selector);
 
+// tol: the sensor's typical tolerance at a reading, from Sensirion's SEN6x datasheet (SEN69C). The
+// indices have none: in a room's usual air every sensor reads 100 (VOC) and 1 (NOx).
+const fineDust = (v) => (v <= 100 ? 5 + 0.05 * v : 0.1 * v);  // PM1, PM2.5
+const coarseDust = (v) => (v <= 100 ? 25 : 0.25 * v);  // PM4, PM10
 const METRICS = [
-  { id: 'co2', label: 'CO₂', unit: 'ppm', dec: 0 },
-  { id: 'pm1', label: 'PM1', unit: 'µg/m³', dec: 1 },
-  { id: 'pm25', label: 'PM2.5', unit: 'µg/m³', dec: 1 },
-  { id: 'pm4', label: 'PM4', unit: 'µg/m³', dec: 1 },
-  { id: 'pm10', label: 'PM10', unit: 'µg/m³', dec: 1 },
-  { id: 'hcho', label: 'Formaldehyde', unit: 'ppb', dec: 1 },
+  { id: 'co2', label: 'CO₂', unit: 'ppm', dec: 0, tol: (v) => 100 + 0.1 * v },
+  { id: 'pm1', label: 'PM1', unit: 'µg/m³', dec: 1, tol: fineDust },
+  { id: 'pm25', label: 'PM2.5', unit: 'µg/m³', dec: 1, tol: fineDust },
+  { id: 'pm4', label: 'PM4', unit: 'µg/m³', dec: 1, tol: coarseDust },
+  { id: 'pm10', label: 'PM10', unit: 'µg/m³', dec: 1, tol: coarseDust },
+  { id: 'hcho', label: 'Formaldehyde', unit: 'ppb', dec: 1, tol: (v) => Math.max(20, 0.2 * v) },
   { id: 'voc', label: 'VOC index', unit: '', dec: 0 },
   { id: 'nox', label: 'NOₓ index', unit: '', dec: 0 },
-  { id: 'temp', label: 'Temperature', unit: '°C', dec: 1 },
-  { id: 'rh', label: 'Humidity', unit: '%', dec: 0 },
+  { id: 'temp', label: 'Temperature', unit: '°C', dec: 1, tol: () => 0.45 },
+  { id: 'rh', label: 'Humidity', unit: '%', dec: 0, tol: () => 4.5 },
 ];
 const LEVELS = { good: 'GOOD', warning: 'FAIR', alarm: 'POOR', unknown: '…' };
 // Smallest span the chart zooms into, so sensor noise doesn't look like a trend.
@@ -199,53 +204,65 @@ const INFO = {
     what: 'Carbon dioxide, breathed out by people. It shows how well the room is ventilated.',
     risk: 'Not toxic at indoor levels, but high CO₂ comes with stuffy air and causes drowsiness, headaches and poorer concentration.',
     basis: 'Warning: Health Canada indoor guideline (1000 ppm, 24-hour average); Germany’s Federal Environment Agency also rates air below 1000 ppm as harmless. Alarm: UK school ventilation guidance (BB101), daily average below 1500 ppm. Outdoor air is about 420 ppm.',
+    tolerance: '±(100 ppm + 10 % of the reading) from 400 to 5000 ppm, after the first 12 hours of use and some fresh air, and from an hour after each start.',
   },
   pm1: {
     what: 'Particles smaller than 1 µm, the finest part of PM2.5: mostly smoke and other combustion.',
     risk: 'They reach deep into the lungs and the bloodstream.',
     basis: 'There is no separate guideline for PM1; it is counted in PM2.5.',
+    tolerance: '±(5 µg/m³ + 5 % of the reading) up to 100 µg/m³, ±10 % above.',
   },
   pm25: {
     what: 'Fine particles smaller than 2.5 µm: smoke, cooking, candles, traffic.',
     risk: 'They reach deep into the lungs; long exposure raises the risk of heart and lung disease.',
     basis: 'Warning: WHO 2021 24-hour guideline. Alarm: US EPA 24-hour standard.',
+    tolerance: '±(5 µg/m³ + 5 % of the reading) up to 100 µg/m³, ±10 % above.',
   },
   pm4: {
     what: 'Particles smaller than 4 µm, between PM2.5 and PM10.',
     risk: 'They reach the small airways of the lungs.',
     basis: 'There is no guideline for PM4.',
+    tolerance: '±25 µg/m³ up to 100 µg/m³, ±25 % above. Wider than for PM2.5 because the sensor estimates PM4 and PM10 from the smaller particles it counts.',
   },
   pm10: {
     what: 'Particles smaller than 10 µm: dust, pollen and mould spores, plus all the finer particles.',
     risk: 'They irritate the nose, throat and airways, and can worsen asthma.',
     basis: 'Warning: WHO 2021 24-hour guideline. Alarm: US EPA 24-hour standard.',
+    tolerance: '±25 µg/m³ up to 100 µg/m³, ±25 % above. Wider than for PM2.5 because the sensor estimates PM4 and PM10 from the smaller particles it counts.',
   },
   hcho: {
     what: 'Formaldehyde, given off by pressed-wood furniture, glues, varnishes, smoke and some cleaning products.',
     risk: 'It irritates the eyes, nose and throat; long exposure to high levels can cause cancer.',
     basis: 'Warning: about the WELL building standard. Alarm: WHO 30-minute guideline (0.1 mg/m³, about 80 ppb).',
+    tolerance: '±20 ppb or ±20 % of the reading, whichever is larger (specified up to 200 ppb), from 10 minutes after the sensor starts.',
   },
   voc: {
     what: 'Volatile organic compounds from cooking, cleaning products, paint, perfume and people. An index, not a concentration: 100 is this room’s usual air, learned over about 12 hours.',
     risk: 'Some of them irritate or cause headaches. The index shows when there is clearly more than usual.',
     basis: 'Sensirion’s index scale: 100 is usual; well above it means clearly more VOCs than usual.',
+    tolerance: 'None shown: in a room’s usual air every sensor reads 100. During the same event two sensors can differ by ±15 points or ±15 %, whichever is larger.',
   },
   nox: {
     what: 'Nitrogen oxides from burning: gas stoves, heaters, traffic. An index where 1 means none detected.',
     risk: 'Nitrogen dioxide irritates the airways and worsens asthma.',
     basis: 'Sensirion’s index scale: 1 is normal; clearly above it means nitrogen oxides are present.',
+    tolerance: 'None shown: in a room’s usual air every sensor reads 1. During the same event two sensors can differ by ±50 points or ±50 %, whichever is larger.',
   },
   temp: {
     what: 'Air temperature at the monitor, corrected by the temperature offset setting.',
     risk: 'Too cold or too warm affects comfort and sleep; cold homes are a health risk, especially for older people.',
     basis: 'Usual comfort range. The WHO recommends at least 18 °C indoors in cold weather.',
+    tolerance: '±0.45 °C (±0.8 °F) from 15 to 30 °C, for the sensor alone; heat from the monitor itself adds to it unless the temperature offset corrects it.',
   },
   rh: {
     what: 'Relative humidity of the air.',
     risk: 'Too dry irritates the eyes, skin and airways; too humid encourages mould and dust mites.',
     basis: 'Usual comfort range; above 70 % mould can grow.',
+    tolerance: '±4.5 % from 30 to 70 % humidity, at 25 °C.',
   },
 };
+// Follows the tolerance in the info of the values that show one.
+const STEADY = ' Much of it is a steady error of this particular sensor, so changes over time are more reliable than the value itself.';
 
 let state = null;
 // hover: x (CSS px) of the pointer over the chart, or null.
@@ -255,6 +272,12 @@ const fahrenheit = () => state !== null && state.units === 'F';
 const convert = (id, v) => (v != null && id === 'temp' && fahrenheit() ? v * 9 / 5 + 32 : v);
 const unitOf = (m) => (m.id === 'temp' ? (fahrenheit() ? '°F' : '°C') : m.unit);
 const format = (m, v) => (v == null ? '--' : convert(m.id, v).toFixed(m.dec));
+// The sensor's tolerance at reading v, in the units shown; null when there's none to show.
+function toleranceOf(m, v) {
+  if (v == null || !m.tol || !$('#tolerance').checked) return null;
+  return m.tol(v) * (m.id === 'temp' && fahrenheit() ? 1.8 : 1);
+}
+const formatTolerance = (t) => '±' + Number(t.toPrecision(2));
 
 async function request(path, options) {
   const response = await fetch(path, options);
@@ -363,6 +386,7 @@ function showInfo(icon, pinned) {
   add(info.risk);
   add(limitsText(m));
   add(info.basis, 'basis');
+  add(`Sensor tolerance (Sensirion datasheet): ${info.tolerance}${m.tol ? STEADY : ''}`, 'basis');
   tip.hidden = false;
   tipFor = icon;
   tipPinned = pinned;
@@ -402,8 +426,9 @@ function renderState() {
   for (const m of METRICS) {
     const d = s.metrics[m.id];
     const card = $('#card-' + m.id);
+    const t = toleranceOf(m, d.value);
     $('.value', card).textContent = format(m, d.value);
-    $('.unit', card).textContent = unitOf(m);
+    $('.unit', card).textContent = (t == null ? '' : formatTolerance(t) + ' ') + unitOf(m);
     card.style.borderLeftColor = `var(--${d.level})`;
   }
 
@@ -483,7 +508,8 @@ function drawChart() {
   g.font = '12px system-ui, sans-serif';
   g.fillStyle = color('muted');
   const m = METRICS.find((x) => x.id === chart.metric);
-  const values = chart.data && state ? chart.data.values.map((v) => convert(m.id, v)) : [];
+  const raw = chart.data && state ? chart.data.values : [];
+  const values = raw.map((v) => convert(m.id, v));
   const known = values.filter((v) => v != null);
   if (known.length === 0) {
     g.textAlign = 'center';
@@ -491,8 +517,13 @@ function drawChart() {
     $('#chart-stats').textContent = '';
     return;
   }
+  // The tolerance band, within what the value can physically be.
+  const tols = raw.map((v) => toleranceOf(m, v));
+  const floor = m.id === 'temp' ? -Infinity : 0, ceiling = m.id === 'rh' ? 100 : Infinity;
+  const low = values.map((v, i) => (tols[i] == null ? v : Math.max(v - tols[i], floor)));
+  const high = values.map((v, i) => (tols[i] == null ? v : Math.min(v + tols[i], ceiling)));
 
-  let lo = Math.min(...known), hi = Math.max(...known);
+  let lo = Math.min(...low.filter((v) => v != null)), hi = Math.max(...high.filter((v) => v != null));
   const minSpan = MIN_SPAN[m.id] * (m.id === 'temp' && fahrenheit() ? 1.8 : 1);
   if (hi - lo < minSpan) {
     const middle = (hi + lo) / 2;
@@ -540,6 +571,30 @@ function drawChart() {
     const half = g.measureText(label).width / 2;
     g.fillText(label, Math.min(Math.max(xx, left + half), right - half), bottom + 6);
   }
+
+  // The tolerance band, shaded, for each stretch of data.
+  g.fillStyle = color('accent');
+  g.globalAlpha = 0.18;
+  const shade = (a, b) => {
+    if (a === b) {
+      g.fillRect(x(timeOf(a)) - 1.5, y(high[a]), 3, y(low[a]) - y(high[a]));
+      return;
+    }
+    g.beginPath();
+    for (let i = a; i <= b; i++) g.lineTo(x(timeOf(i)), y(high[i]));
+    for (let i = b; i >= a; i--) g.lineTo(x(timeOf(i)), y(low[i]));
+    g.fill();
+  };
+  let from = -1;
+  for (let i = 0; i <= values.length; i++) {
+    const banded = i < values.length && tols[i] != null;
+    if (banded && from < 0) from = i;
+    if (!banded && from >= 0) {
+      shade(from, i - 1);
+      from = -1;
+    }
+  }
+  g.globalAlpha = 1;
 
   // Warning and alarm limits in view, dashed.
   const limits = state.metrics[m.id];
@@ -599,7 +654,7 @@ function drawChart() {
   g.arc(xi, yi, 4, 0, 2 * Math.PI);
   g.fill();
   const when = new Date(timeOf(i)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const text = `${when}   ${f(values[i])} ${unitOf(m)}`.trim();
+  const text = `${when}   ${f(values[i])}${tols[i] == null ? '' : ' ' + formatTolerance(tols[i])} ${unitOf(m)}`.trim();
   g.font = '600 13px system-ui, sans-serif';
   const w = g.measureText(text).width + 14;
   const bx = xi + 8 + w <= right ? xi + 8 : xi - 8 - w;  // beside the line, inside the chart
@@ -766,14 +821,23 @@ $('#upload').addEventListener('click', async () => {
 
 // ---------------------------------------------------------------- start
 
-// Whether clicking a value jumps to the chart; remembered by this browser.
-try {
-  $('#jump').checked = localStorage.getItem('jumpToChart') !== 'off';
-} catch (e) {
-  $('#jump').checked = true;
+// View options, on unless turned off; remembered by this browser.
+function viewOption(id, key, changed = () => {}) {
+  const box = $('#' + id);
+  try {
+    box.checked = localStorage.getItem(key) !== 'off';
+  } catch (e) {
+    box.checked = true;
+  }
+  box.addEventListener('change', () => {
+    try { localStorage.setItem(key, box.checked ? 'on' : 'off'); } catch (err) { /* not remembered */ }
+    changed();
+  });
 }
-$('#jump').addEventListener('change', (e) => {
-  try { localStorage.setItem('jumpToChart', e.target.checked ? 'on' : 'off'); } catch (err) { /* not remembered */ }
+viewOption('jump', 'jumpToChart');  // whether clicking a value jumps to the chart
+viewOption('tolerance', 'showTolerance', () => {
+  if (state) renderState();
+  drawChart();
 });
 
 buildCards();

@@ -15,7 +15,7 @@ a [Sensirion SEN69C](https://sensirion.com/products/catalog/SEN69C) environmenta
 - Settings menu: brightness, auto-dim, °C/°F, status LED, Wi-Fi, temperature offset, altitude, CO₂ self-calibration, fan cleaning, CO₂ recalibration, restart, factory reset. Settings survive restarts and power cuts. (The sensor itself forgets the altitude, temperature offset and self-calibration setting when it loses power, so the firmware sends them again every time it starts.)
 - Battery charge (Feather's MAX17048 gauge) when a LiPo is connected and *A battery is connected* is ticked on the web page; without a battery the gauge reads the charger and is ignored.
 - Wi-Fi setup from a phone, no reflashing: scan the QR code on the screen and pick your network. Up to five networks are saved; the monitor joins whichever is in range.
-- Local web page with live values, trend charts, settings, maintenance and firmware updates over Wi-Fi (with automatic rollback if an update fails).
+- Local web page with live values (optionally with the sensor's tolerance), trend charts, settings, maintenance and firmware updates over Wi-Fi (with automatic rollback if an update fails).
 - Works fully offline; Wi-Fi is optional and everything stays on your network (no cloud).
 
 Planned: Home Assistant integration through MQTT auto-discovery.
@@ -54,6 +54,12 @@ When the screen is dimmed, the first press only wakes it.
 A level only drops back once the value is a little inside the limit again, so readings near a limit don't flicker.
 The sensor's readings are only meaningful once warmed up: formaldehyde needs about 10 minutes, and the VOC and NOx
 indices learn the room's typical air over the first hours.
+
+The web page can show each reading's typical tolerance from Sensirion's SEN6x datasheet, as `±` on the values and as
+a shaded band on the chart: CO₂ ±(100 ppm + 10 %), PM1 and PM2.5 ±(5 µg/m³ + 5 %), PM4 and PM10 ±25 µg/m³ (above
+100 µg/m³: ±10 % and ±25 %), formaldehyde ±20 ppb or ±20 % (the larger), temperature ±0.45 °C, humidity ±4.5 %.
+Much of it is a steady error of the individual sensor, so changes over time are more reliable than absolute values.
+The VOC and NOx indices have none: every sensor reads 100 and 1 in the room's usual air.
 
 ### Wi-Fi and the web page
 
