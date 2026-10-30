@@ -11,6 +11,9 @@ only, without sound, and it is not a smoke or carbon monoxide alarm.
 humidity, all in green](docs/screen.png)
 
 > **Status:** working (version 0.3.0) and still being developed.
+>
+> **Made with AI:** the code and documentation were written by an AI, Anthropic's Claude, working in Claude Code.
+> The author set the requirements, made the design decisions and tested the monitor on the real hardware.
 
 ## Features
 
