@@ -542,6 +542,8 @@ esp_err_t postAction(httpd_req_t* req) {
   if (action == nullptr) return badRequest(req, "Expected {\"action\": ...}");
   if (strcmp(action, "cleanFan") == 0) {
     ctx.sensor->cleanFan();
+  } else if (strcmp(action, "heatHumiditySensor") == 0) {
+    ctx.sensor->heatHumiditySensor();
   } else if (strcmp(action, "calibrateCo2") == 0) {
     const cJSON* ppm = field(json.get(), "ppm");
     if (!cJSON_IsNumber(ppm) || ppm->valuedouble < 350 || ppm->valuedouble > 2000) {

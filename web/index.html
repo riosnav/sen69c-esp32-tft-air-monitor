@@ -172,6 +172,10 @@ footer { color: var(--muted); font-size: 12px; margin-top: 30px; }
       <button type="button" class="plain" id="clean-fan">Clean</button>
     </div>
     <div class="task">
+      <div><strong>Heat the humidity sensor</strong><p class="hint">After a long time in very humid air, the humidity reads too high; a second of heat fixes it. Readings pause for about a minute.</p></div>
+      <button type="button" class="plain" id="heat">Heat</button>
+    </div>
+    <div class="task">
       <div><strong>Calibrate CO&#8322;</strong><p class="hint">Only after at least 3 minutes in fresh outdoor air, with the reference value of that air.</p></div>
       <span class="row"><input type="number" id="ppm" value="420" min="350" max="2000" step="1" style="width:100px" aria-label="Reference ppm"> ppm
         <button type="button" class="plain" id="calibrate">Calibrate</button></span>
@@ -906,6 +910,8 @@ async function action(body, done) {
 
 $('#clean-fan').addEventListener('click', () =>
   action({ action: 'cleanFan' }, 'Fan cleaning started; readings pause for about 40 s.'));
+$('#heat').addEventListener('click', () =>
+  action({ action: 'heatHumiditySensor' }, 'Heating started; readings pause for about a minute.'));
 $('#calibrate').addEventListener('click', () => {
   const ppm = Number($('#ppm').value);
   if (confirm(`Calibrate the CO₂ sensor to ${ppm} ppm now? Only do this after at least 3 minutes in fresh outdoor air.`)) {

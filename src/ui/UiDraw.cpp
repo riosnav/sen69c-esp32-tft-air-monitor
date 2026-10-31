@@ -37,7 +37,8 @@ const lgfx::IFont* const kHuge = &fonts::DejaVu40;
 constexpr const char* kItemLabels[] = {
     "Brightness",   "Dim after",    "Units",          "Status LED",
     "Wi-Fi",        "Set up Wi-Fi", "Forget Wi-Fi",
-    "Temp. offset", "Altitude",     "CO_2 self-calibration", "Calibrate CO_2", "Clean fan",
+    "Temp. offset", "Altitude",     "CO_2 self-calibration", "Calibrate CO_2",
+    "Clean fan", "Heat humidity sensor",
     "Restart",      "Factory reset", "Close",
 };
 
@@ -841,6 +842,11 @@ void Ui::drawConfirm() {
       title = "Clean the fan?";
       line1 = "Full speed for 10 s; readings";
       line2 = "pause for about 40 s.";
+      break;
+    case Item::HeatHumiditySensor:
+      title = "Heat RH sensor?";
+      line1 = "Fixes high humidity readings";
+      line2 = "after damp air. About 1 min.";
       break;
     case Item::CalibrateCo2:
       title = "Calibrate CO_2?";

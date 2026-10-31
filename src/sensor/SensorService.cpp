@@ -36,6 +36,14 @@ constexpr int16_t kUnknownI16 = 0x7FFF;
 // Stopping during the first 24 s of CO2 conditioning causes a CO2 error.
 constexpr uint32_t kCo2ConditioningMs = 24000;
 constexpr uint32_t kFanCleaningMs = 10000;
+// The humidity sensor's heater runs for 1 s. Firmware older than 9.0 is busy
+// for 1.3 s after the command; newer firmware reports when it's done. The
+// temperature reading needs 20 s to settle afterwards.
+constexpr uint8_t kHeaterReportsFromFirmware = 9;
+constexpr uint32_t kHeaterBusyMs = 1300;
+constexpr uint32_t kHeaterPollMs = 50;
+constexpr uint32_t kHeaterMaxMs = 3000;
+constexpr uint32_t kHeaterSettleMs = 20000;
 // PM readings are only stable 30 s after a measurement starts (datasheet);
 // earlier ones often overshoot and would raise false alerts.
 constexpr uint32_t kPmStartupMs = 30000;
@@ -92,6 +100,8 @@ void SensorService::applyConfig(const SensorConfig& config) {
 }
 
 void SensorService::cleanFan() { send({CommandType::CleanFan, {}, 0}); }
+
+void SensorService::heatHumiditySensor() { send({CommandType::HeatHumiditySensor, {}, 0}); }
 
 void SensorService::recalibrateCo2(uint16_t referencePpm) {
   send({CommandType::RecalibrateCo2, {}, referencePpm});
@@ -231,6 +241,31 @@ void SensorService::applyTemperatureOffset() {
   sen_.setTemperatureOffsetParameters(offset, 0, 0, 0);
 }
 
+// Only while the sensor is idle.
+bool SensorService::runHeater() {
+  uint8_t firmwareMajor;
+  {
+    Lock lock(mutex_);
+    firmwareMajor = shared_.firmwareMajor;
+  }
+  if (sen_.activateShtHeater() != 0) return false;
+  if (firmwareMajor < kHeaterReportsFromFirmware) {
+    vTaskDelay(pdMS_TO_TICKS(kHeaterBusyMs));
+  } else {
+    int16_t rh = kUnknownI16;
+    int16_t t = kUnknownI16;
+    for (uint32_t waited = 0; rh == kUnknownI16 && waited < kHeaterMaxMs; waited += kHeaterPollMs) {
+      vTaskDelay(pdMS_TO_TICKS(kHeaterPollMs));
+      if (sen_.getShtHeaterMeasurements(rh, t) != 0) rh = kUnknownI16;
+    }
+    if (rh != kUnknownI16) {
+      Serial.printf("Heater done: %.1f %%RH, %.1f C while hot\n", rh / 100.0f, t / 200.0f);
+    }
+  }
+  vTaskDelay(pdMS_TO_TICKS(kHeaterSettleMs));
+  return true;
+}
+
 void SensorService::handle(const Command& cmd) {
   bool restarted = true;
   switch (cmd.type) {
@@ -256,6 +291,12 @@ void SensorService::handle(const Command& cmd) {
       } else {
         setResult("Fan cleaning failed");
       }
+      restarted = startMeasurement(false);
+      break;
+    case CommandType::HeatHumiditySensor:
+      setState(SensorState::Busy, "Heating sensor");
+      stopMeasurement();
+      setResult(runHeater() ? "Humidity sensor heated" : "Heating failed");
       restarted = startMeasurement(false);
       break;
     case CommandType::RecalibrateCo2: {

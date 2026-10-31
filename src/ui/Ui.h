@@ -58,6 +58,7 @@ class Ui {
     Co2SelfCalibration,
     CalibrateCo2,
     CleanFan,
+    HeatHumiditySensor,
     Restart,
     FactoryReset,
     Close,

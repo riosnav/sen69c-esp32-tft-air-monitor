@@ -58,10 +58,18 @@ class SensorService {
   // All commands are queued and run in the sensor task.
   void applyConfig(const SensorConfig& config);
   void cleanFan();
+  // Briefly heats the humidity sensor, which undoes the too-high readings it
+  // gives after a long time in very humid air.
+  void heatHumiditySensor();
   void recalibrateCo2(uint16_t referencePpm);
 
  private:
-  enum class CommandType : uint8_t { ApplyConfig, CleanFan, RecalibrateCo2 };
+  enum class CommandType : uint8_t {
+    ApplyConfig,
+    CleanFan,
+    HeatHumiditySensor,
+    RecalibrateCo2,
+  };
   struct Command {
     CommandType type;
     SensorConfig config;
@@ -74,6 +82,7 @@ class SensorService {
   bool startMeasurement(bool resumeIfRunning);
   void stopMeasurement();
   void applyTemperatureOffset();
+  bool runHeater();
   void handle(const Command& cmd);
   void pollMeasurement();
   void readDeviceStatus();
