@@ -191,7 +191,7 @@ in memory and start over after a restart or update.
 | Altitude | Your height above sea level, for the CO₂ reading. |
 | CO₂ self-calibration | Keeps the CO₂ reading accurate on its own. Leave it on if the room gets fresh air at least once a week. |
 | Calibrate CO₂ | Sets the current reading to 420 ppm, the CO₂ of outdoor air. **Only outdoors** (power it from a power bank or the battery), after 3 minutes in fresh air; indoors it makes the readings wrong. |
-| Clean fan | Runs the sensor's fan at full speed for 10 s to blow out dust. The sensor also does this weekly by itself. |
+| Clean fan | Runs the sensor's fan at full speed for 10 s to blow out dust. The sensor doesn't do this by itself. |
 | Restart | Restarts the monitor. |
 | Factory reset | Erases all settings, saved Wi-Fi networks, the web password and the Home Assistant settings. |
 
