@@ -4,6 +4,7 @@
 // Run on the board with `pio test`.
 
 #include <AirQuality.h>
+#include <BatteryWatch.h>
 #include <ButtonLogic.h>
 #include <Comfort.h>
 #include <History.h>
@@ -243,6 +244,34 @@ static void test_fixed_address_checks() {
   TEST_ASSERT_NOT_NULL(net::checkFixedAddress(ip, mask, gw, 0xE0000001));  // multicast DNS server
 }
 
+static void test_battery_state_from_charge_rate() {
+  TEST_ASSERT_EQUAL(power::BatteryState::Unknown, power::stateOf(NAN));
+  TEST_ASSERT_EQUAL(power::BatteryState::Charging, power::stateOf(12.5f));
+  TEST_ASSERT_EQUAL(power::BatteryState::Discharging, power::stateOf(-6.2f));
+  TEST_ASSERT_EQUAL(power::BatteryState::Idle, power::stateOf(0.208f));
+  TEST_ASSERT_EQUAL(power::BatteryState::Idle, power::stateOf(-0.208f));
+}
+
+static void test_battery_warnings_with_hysteresis() {
+  power::BatteryWatch w;
+  w.update(3.7f, 21, -8, 0);
+  TEST_ASSERT_EQUAL(0, w.warning());
+  w.update(3.7f, 20, -8, 0);
+  TEST_ASSERT_EQUAL(1, w.warning());
+  w.update(3.7f, 21.5f, -8, 0);  // wavering just above the limit
+  TEST_ASSERT_EQUAL(1, w.warning());
+  w.update(3.6f, 9.5f, -8, 0);
+  TEST_ASSERT_EQUAL(2, w.warning());
+  w.update(3.6f, 11, -8, 0);
+  TEST_ASSERT_EQUAL(2, w.warning());
+  w.update(3.6f, 12.5f, -8, 0);  // clearly above 10 %, still below 20 %
+  TEST_ASSERT_EQUAL(1, w.warning());
+  w.update(3.6f, 12, 15, 0);  // USB power: charging
+  TEST_ASSERT_EQUAL(0, w.warning());
+  w.update(NAN, NAN, NAN, 0);
+  TEST_ASSERT_EQUAL(0, w.warning());
+}
+
 static int runTests() {
   UNITY_BEGIN();
   RUN_TEST(test_level_unknown_for_nan);
@@ -260,6 +289,8 @@ static int runTests() {
   RUN_TEST(test_login_guard_survives_millis_wrapping);
   RUN_TEST(test_ipv4_parse_and_format);
   RUN_TEST(test_fixed_address_checks);
+  RUN_TEST(test_battery_state_from_charge_rate);
+  RUN_TEST(test_battery_warnings_with_hysteresis);
   return UNITY_END();
 }
 

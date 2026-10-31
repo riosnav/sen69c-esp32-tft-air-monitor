@@ -101,6 +101,19 @@ const char* setupStateId(SetupState state) {
   }
 }
 
+const char* batteryStateId(power::BatteryState state) {
+  switch (state) {
+    case power::BatteryState::Charging:
+      return "charging";
+    case power::BatteryState::Discharging:
+      return "discharging";
+    case power::BatteryState::Idle:
+      return "idle";
+    default:
+      return "unknown";
+  }
+}
+
 const char* otaStateId(OtaState state) {
   switch (state) {
     case OtaState::Receiving:
@@ -407,6 +420,8 @@ esp_err_t getState(httpd_req_t* req) {
       cJSON* battery = cJSON_AddObjectToObject(r, "battery");
       addNumber(battery, "volts", s.batteryVolts, 2);
       addNumber(battery, "percent", s.batteryPercent, 0);
+      cJSON_AddStringToObject(battery, "state", batteryStateId(power::stateOf(s.batteryRate)));
+      cJSON_AddNumberToObject(battery, "warning", ctx.battery->warning());
     }
 
     cJSON* wifi = cJSON_AddObjectToObject(r, "wifi");

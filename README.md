@@ -204,8 +204,12 @@ in memory and start over after a restart or update.
 | Factory reset | Erases all settings, saved Wi-Fi networks, the web password and the Home Assistant settings. |
 
 If a LiPo battery is connected, tick *A battery is connected* on the web page (*Settings → Display and sensor*;
-this needs Wi-Fi set up once) to show its charge on the *Device* page. Without a battery the board's battery
-gauge reads the charger, so this is off by default.
+this needs Wi-Fi set up once). Without a battery the board's battery gauge reads the charger, so this is off by
+default. With it ticked:
+
+- The *Device* page shows the battery's charge, and whether it's charging or running the monitor. Home Assistant
+  gets a *Battery* sensor.
+- While the monitor runs on battery, a pop-up warns at 20 % and again at 10 %, and the web page shows a banner.
 
 ## Wi-Fi and the web page
 
@@ -254,8 +258,8 @@ take the monitor elsewhere.
 
 The monitor can send its readings to [Home Assistant](https://www.home-assistant.io/) through an MQTT broker (a
 small message server). Home Assistant then lists it as a device with a sensor for every value, a *status* sensor
-(Good, Fair or Poor) for every value that has limits, the overall air quality and the Wi-Fi signal, without any
-YAML (it uses Home Assistant's MQTT discovery).
+(Good, Fair or Poor) for every value that has limits, the overall air quality, the Wi-Fi signal and, if one is
+connected, the battery, without any YAML (it uses Home Assistant's MQTT discovery).
 
 ![The monitor's device page in Home Assistant: device info with a link to the web page, and the sensors, each value
 followed by its status](docs/home-assistant.png)

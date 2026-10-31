@@ -81,6 +81,14 @@ bool readRegister16(uint8_t address, uint8_t reg, uint16_t& value) {
   return true;
 }
 
+bool writeRegister16(uint8_t address, uint8_t reg, uint16_t value) {
+  Wire.beginTransmission(address);
+  Wire.write(reg);
+  Wire.write(static_cast<uint8_t>(value >> 8));
+  Wire.write(static_cast<uint8_t>(value & 0xFF));
+  return Wire.endTransmission() == 0;
+}
+
 }  // namespace
 
 void SensorService::begin(const SensorConfig& config) {
@@ -391,13 +399,20 @@ void SensorService::readDeviceStatus() {
 }
 
 void SensorService::readBattery() {
-  // MAX17048: VCELL in 78.125 uV steps, SOC in 1/256 %.
+  // MAX17048: VCELL in 78.125 uV steps, SOC in 1/256 %, CRATE (signed) in
+  // 0.208 % per hour. It hibernates when the battery is hardly used, and then
+  // updates the rate rarely; HIBRT = 0 keeps it awake (about 20 uA more).
+  if (!gaugeAwake_) gaugeAwake_ = writeRegister16(kAddrMax17048, 0x0A, 0x0000);
   uint16_t vcell = 0;
   uint16_t soc = 0;
-  bool ok = readRegister16(kAddrMax17048, 0x02, vcell) && readRegister16(kAddrMax17048, 0x04, soc);
+  uint16_t crate = 0;
+  const bool ok = readRegister16(kAddrMax17048, 0x02, vcell) &&
+                  readRegister16(kAddrMax17048, 0x04, soc) &&
+                  readRegister16(kAddrMax17048, 0x16, crate);
   Lock lock(mutex_);
   shared_.batteryVolts = ok ? vcell * 78.125e-6f : NAN;
   shared_.batteryPercent = ok ? soc / 256.0f : NAN;
+  shared_.batteryRate = ok ? static_cast<int16_t>(crate) * 0.208f : NAN;
 }
 
 void SensorService::setState(SensorState state, const char* activity) {

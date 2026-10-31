@@ -12,6 +12,7 @@
 #pragma once
 
 #include <AirQuality.h>
+#include <BatteryWatch.h>
 #include <ButtonLogic.h>
 #include <History.h>
 
@@ -27,7 +28,7 @@ class Ui {
  public:
   void begin(SensorService& sensor, Settings& settings, const aq::AirQuality& airQuality,
              const aq::MetricHistory& history, WifiService& wifi, Ota& ota,
-             const MqttService& mqtt);
+             const MqttService& mqtt, const power::BatteryWatch& battery);
   // Call often from loop(); `snapshot` is the sensor's latest state.
   void update(const SensorSnapshot& snapshot, uint32_t nowMs);
   // The settings were changed elsewhere (web page): apply and save them.
@@ -87,6 +88,7 @@ class Ui {
   void commitSettings();
   void updateAlerts(uint32_t nowMs);
   void dismissAlert();
+  bool alertShowing() const { return alertVisible_ || batteryAlert_ != 0; }
   void updateBacklight(uint32_t nowMs);
   void showToast(const char* text, uint32_t nowMs);
   bool warmingUp() const;
@@ -115,6 +117,7 @@ class Ui {
   void drawMenu();
   void drawConfirm();
   void drawAlert();
+  void drawBatteryAlert();
   void drawToast();
 
   // Formatting (UiDraw.cpp)
@@ -135,6 +138,7 @@ class Ui {
   WifiService* wifi_ = nullptr;
   Ota* ota_ = nullptr;
   const MqttService* mqtt_ = nullptr;
+  const power::BatteryWatch* battery_ = nullptr;
   SensorSnapshot snapshot_;
   bool settingsChanged_ = false;
 
@@ -152,6 +156,10 @@ class Ui {
   aq::Metric alertMetric_ = aq::Metric::Co2;
   aq::Level alertLevel_ = aq::Level::Unknown;
   uint32_t alertShownMs_ = 0;
+  // The battery's warning (BatteryWatch::warning()) showing, after any air
+  // alert, and the last one acknowledged.
+  uint8_t batteryAlert_ = 0;
+  uint8_t batteryAcknowledged_ = 0;
 
   uint32_t lastInputMs_ = 0;
   bool dimmed_ = false;

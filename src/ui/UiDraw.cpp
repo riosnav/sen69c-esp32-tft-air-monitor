@@ -246,6 +246,9 @@ void Ui::draw(uint32_t nowMs) {
   if (alertVisible_) {
     drawAlert();
     hints[0] = hints[1] = hints[2] = Hint::Cross;
+  } else if (batteryAlert_ != 0) {
+    drawBatteryAlert();
+    hints[0] = hints[1] = hints[2] = Hint::Cross;
   }
   if (static_cast<int32_t>(toastUntilMs_ - nowMs) > 0) drawToast();
   drawHints(hints[0], hints[1], hints[2]);
@@ -578,8 +581,17 @@ void Ui::drawDevice(uint32_t nowMs) {
     if (std::isnan(s.batteryVolts)) {
       line("No battery monitor", theme::kMuted);
     } else {
-      line("Battery " + String(s.batteryVolts, 2) + " V, " + number(s.batteryPercent, 0) + " %",
-           theme::kMuted);
+      // What it's doing if anything, else its voltage.
+      String text = "Battery " + number(s.batteryPercent, 0) + " %";
+      const power::BatteryState state = power::stateOf(s.batteryRate);
+      if (state == power::BatteryState::Charging) {
+        text += ", charging";
+      } else if (state == power::BatteryState::Discharging) {
+        text += ", in use";
+      } else {
+        text += ", " + String(s.batteryVolts, 2) + " V";
+      }
+      line(text, battery_->warning() != 0 ? theme::kWarning : theme::kMuted);
     }
   }
   line("Uptime " + duration(nowMs) + ", v" FW_VERSION, theme::kMuted);
@@ -978,6 +990,28 @@ void Ui::drawAlert() {
   frame_.setFont(kBody);
   drawRich(frame_, unitText(m), x + 8 + vw + 4, y + 65, theme::kMuted);
   drawRich(frame_, advice, x + 8, y + 85, theme::kText);
+  frame_.setFont(kSmall);
+  drawRich(frame_, "Press any button", x + 8, y + 104, theme::kMuted);
+}
+
+// Like an air alert, for a battery running low.
+void Ui::drawBatteryAlert() {
+  constexpr int x = kLeft;
+  constexpr int y = 20;
+  constexpr int w = kRight - kLeft;
+  constexpr int h = 115;
+  const bool veryLow = batteryAlert_ >= 2;
+  const uint16_t color = veryLow ? theme::kAlarm : theme::kWarning;
+  frame_.fillRect(x, y, w, h, theme::kBackground);
+  frame_.drawRect(x, y, w, h, color);
+  frame_.drawRect(x + 1, y + 1, w - 2, h - 2, color);
+  frame_.setFont(kMedium);
+  drawRich(frame_, veryLow ? "Battery very low" : "Battery low", x + 8, y + 23, color);
+  frame_.setFont(kHuge);
+  const int vw = drawRich(frame_, number(snapshot_.batteryPercent, 0).c_str(), x + 8, y + 65, theme::kText);
+  frame_.setFont(kBody);
+  drawRich(frame_, "%", x + 8 + vw + 4, y + 65, theme::kMuted);
+  drawRich(frame_, "Connect USB power", x + 8, y + 85, theme::kText);
   frame_.setFont(kSmall);
   drawRich(frame_, "Press any button", x + 8, y + 104, theme::kMuted);
 }

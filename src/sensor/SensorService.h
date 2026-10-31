@@ -40,6 +40,7 @@ struct SensorSnapshot {
   uint8_t firmwareMinor = 0;
   float batteryVolts = NAN;  // NaN when no battery monitor answers
   float batteryPercent = NAN;
+  float batteryRate = NAN;  // % per hour, negative while discharging
   // Altitude the sensor reported back after it was set; -1 when it couldn't be
   // read (it can only be read while the sensor is idle, i.e. at start).
   int32_t confirmedAltitudeM = -1;
@@ -103,6 +104,7 @@ class SensorService {
   SensorState state_ = SensorState::Starting;
   uint32_t startedMs_ = 0;
   uint32_t consecutiveErrors_ = 0;
+  bool gaugeAwake_ = false;  // the battery monitor's hibernation is off
 
   mutable SemaphoreHandle_t mutex_ = nullptr;
   QueueHandle_t queue_ = nullptr;

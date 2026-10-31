@@ -6,6 +6,7 @@
 
 #include <AirQuality.h>
 #include <Arduino.h>
+#include <BatteryWatch.h>
 #include <History.h>
 #include <esp_system.h>
 
@@ -34,6 +35,7 @@ aq::MetricHistory* history = nullptr;
 WifiService wifi;
 Ota ota;
 MqttService mqtt;
+power::BatteryWatch battery;
 Ui ui;
 
 // The history is ~72 KB: keep it in PSRAM and leave internal RAM for Wi-Fi.
@@ -106,7 +108,7 @@ void setup() {
       {userSettings.tempOffsetC, userSettings.altitudeM, userSettings.co2SelfCalibration});
   wifi.begin(userSettings);
   mqtt.begin(userSettings, wifi);
-  ui.begin(sensor, userSettings, airQuality, *history, wifi, ota, mqtt);
+  ui.begin(sensor, userSettings, airQuality, *history, wifi, ota, mqtt, battery);
 }
 
 void loop() {
@@ -126,11 +128,16 @@ void loop() {
     wifi.loop(now);
     if (!web::started() && wifi.networkStarted()) {
       web::begin(
-          {&latest, &airQuality, history, &userSettings, &sensor, &wifi, &ota, &mqtt, &ui});
+          {&latest, &airQuality, history, &userSettings, &sensor, &wifi, &ota, &mqtt, &battery, &ui});
     }
     const bool offline = !userSettings.wifiEnabled || wifi.saved().size() == 0;
     ota.loop(wifi.state() == WifiState::Connected, offline, now);
     mqtt.loop(latest, airQuality, now);
+    if (userSettings.batteryInstalled) {
+      battery.update(latest.batteryVolts, latest.batteryPercent, latest.batteryRate, now);
+    } else {
+      battery = power::BatteryWatch();
+    }
     ui.update(latest, now);
 
     if (now - lastLogMs >= kLogIntervalMs) {

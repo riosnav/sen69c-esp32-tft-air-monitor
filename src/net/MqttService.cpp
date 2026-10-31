@@ -121,7 +121,8 @@ void MqttService::loop(const SensorSnapshot& snapshot, const aq::AirQuality& air
   logChanges();
   if (!connected_) return;
 
-  if (justConnected_.exchange(false) || strcmp(announcedName_, settings_->name) != 0) {
+  if (justConnected_.exchange(false) || strcmp(announcedName_, settings_->name) != 0 ||
+      announcedBattery_ != settings_->batteryInstalled) {
     announce();
     lastStateMs_ = nowMs - kStateIntervalMs + kFirstStateDelayMs;
   }
@@ -257,6 +258,16 @@ void MqttService::announce() {
   cJSON_AddStringToObject(rssi, "unit_of_meas", "dBm");
   cJSON_AddStringToObject(rssi, "stat_cla", "measurement");
   cJSON_AddStringToObject(rssi, "entity_category", "diagnostic");
+  if (settings_->batteryInstalled) {
+    cJSON* battery = addSensor(components, "battery", "Battery", "battery");
+    cJSON_AddStringToObject(battery, "dev_cla", "battery");
+    cJSON_AddStringToObject(battery, "unit_of_meas", "%");
+    cJSON_AddStringToObject(battery, "stat_cla", "measurement");
+    cJSON_AddStringToObject(battery, "entity_category", "diagnostic");
+  } else {
+    // Removes it, if an earlier announcement had it.
+    cJSON_AddStringToObject(cJSON_AddObjectToObject(components, "battery"), "p", "sensor");
+  }
 
   const JsonText text(cJSON_PrintUnformatted(r));
   if (!text) return;
@@ -267,6 +278,7 @@ void MqttService::announce() {
                 static_cast<unsigned>(strlen(text.get())),
                 config < 0 || online < 0 ? ", but it could not be queued" : "");
   strlcpy(announcedName_, settings_->name, sizeof announcedName_);
+  announcedBattery_ = settings_->batteryInstalled;
 }
 
 void MqttService::publishState(const SensorSnapshot& snapshot, const aq::AirQuality& air) {
@@ -287,6 +299,7 @@ void MqttService::publishState(const SensorSnapshot& snapshot, const aq::AirQual
   }
   addLevel(r, "air", air.overall());
   cJSON_AddNumberToObject(r, "rssi", wifi_->rssi());
+  if (settings_->batteryInstalled) addNumber(r, "battery", snapshot.batteryPercent, 0);
   const JsonText text(cJSON_PrintUnformatted(r));
   if (text) esp_mqtt_client_enqueue(client_, stateTopic_, text.get(), 0, 0, 0, true);
 }

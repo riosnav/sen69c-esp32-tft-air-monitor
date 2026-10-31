@@ -24,6 +24,7 @@
 #pragma once
 
 #include <AirQuality.h>
+#include <BatteryWatch.h>
 #include <History.h>
 
 #include "Settings.h"
@@ -45,6 +46,7 @@ struct Context {
   WifiService* wifi;
   Ota* ota;
   const MqttService* mqtt;
+  const power::BatteryWatch* battery;
   Ui* ui;  // told when the settings change
 };
 

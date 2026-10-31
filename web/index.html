@@ -84,6 +84,7 @@ footer { color: var(--muted); font-size: 12px; margin-top: 30px; }
 <div class="wrap">
   <header><h1 id="name">Air Monitor</h1><span id="overall" class="pill">&hellip;</span></header>
   <p id="offline" class="card banner" hidden>Can't reach the monitor. Retrying&hellip;</p>
+  <p id="battery-low" class="card banner" hidden></p>
 
   <div id="metrics" class="grid"></div>
 
@@ -578,7 +579,15 @@ function renderState() {
     ['Status', status],
   ];
   if (sensor.altitude != null) rows.push(['Altitude for CO₂', `${sensor.altitude} m, confirmed by the sensor`]);
-  if (s.battery) rows.push(['Battery', `${s.battery.volts.toFixed(2)} V, ${s.battery.percent ?? '?'} %`]);
+  if (s.battery) {
+    const use = { charging: ', charging', discharging: ', running the monitor' }[s.battery.state] || '';
+    rows.push(['Battery', `${s.battery.percent ?? '?'} %, ${s.battery.volts.toFixed(2)} V${use}`]);
+  }
+  const low = s.battery ? s.battery.warning : 0;
+  $('#battery-low').hidden = !low;
+  if (low) {
+    $('#battery-low').textContent = `The battery is ${low > 1 ? 'very ' : ''}low (${s.battery.percent} %). Connect USB power.`;
+  }
   rows.push(['Wi-Fi', s.wifi.ssid ? `${s.wifi.ssid}, ${s.wifi.rssi} dBm` : 'not connected']);
   if (s.mqtt.state !== 'off') rows.push(['Home Assistant', mqttText(s.mqtt)]);
   $('#mqtt-status').textContent = `Status: ${mqttText(s.mqtt)}.`;

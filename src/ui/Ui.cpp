@@ -37,7 +37,7 @@ bool updating(OtaState state) {
 
 void Ui::begin(SensorService& sensor, Settings& settings, const aq::AirQuality& airQuality,
                const aq::MetricHistory& history, WifiService& wifi, Ota& ota,
-               const MqttService& mqtt) {
+               const MqttService& mqtt, const power::BatteryWatch& battery) {
   sensor_ = &sensor;
   settings_ = &settings;
   aq_ = &airQuality;
@@ -45,6 +45,7 @@ void Ui::begin(SensorService& sensor, Settings& settings, const aq::AirQuality& 
   wifi_ = &wifi;
   ota_ = &ota;
   mqtt_ = &mqtt;
+  battery_ = &battery;
 
   for (size_t i = 0; i < 3; ++i) {
     pinMode(kButtonPins[i], kPressedLevel[i] == LOW ? INPUT_PULLUP : INPUT_PULLDOWN);
@@ -114,7 +115,7 @@ void Ui::handleButton(size_t button, aq::ButtonEvent event, uint32_t nowMs) {
     if (button == 1 && event == ButtonEvent::Click) wifi_->stopSetup();
     return;
   }
-  if (alertVisible_) {
+  if (alertShowing()) {
     if (event == ButtonEvent::Click) dismissAlert();
     return;
   }
@@ -386,22 +387,37 @@ void Ui::updateAlerts(uint32_t nowMs) {
       level = current;
     }
   }
-  const bool isNew = found && (!alertVisible_ || metric != alertMetric_ || level != alertLevel_);
+  bool isNew = found && (!alertVisible_ || metric != alertMetric_ || level != alertLevel_);
   alertVisible_ = found;
   alertMetric_ = metric;
   alertLevel_ = level;
+
+  // The battery, while it runs the monitor: low, then very low. It waits
+  // behind an air alert.
+  const uint8_t battery = settings_->batteryInstalled ? battery_->warning() : 0;
+  if (battery < batteryAcknowledged_) batteryAcknowledged_ = battery;
+  const uint8_t batteryAlert = battery > batteryAcknowledged_ ? battery : 0;
+  if (batteryAlert != batteryAlert_ && batteryAlert != 0 && !alertVisible_) isNew = true;
+  batteryAlert_ = batteryAlert;
+
   if (isNew) {
     alertShownMs_ = nowMs;
     lastInputMs_ = nowMs;  // wake the screen
     dirty_ = true;
   }
   // Left alone, an alert closes by itself, as if dismissed.
-  if (alertVisible_ && nowMs - alertShownMs_ >= kAlertTimeoutMs) dismissAlert();
+  if (alertShowing() && nowMs - alertShownMs_ >= kAlertTimeoutMs) dismissAlert();
 }
 
 void Ui::dismissAlert() {
-  acknowledged_[aq::idx(alertMetric_)] = alertLevel_;
-  alertVisible_ = false;
+  if (alertVisible_) {
+    acknowledged_[aq::idx(alertMetric_)] = alertLevel_;
+    alertVisible_ = false;
+  } else {
+    batteryAcknowledged_ = batteryAlert_;
+    batteryAlert_ = 0;
+  }
+  alertShownMs_ = millis();  // the timeout starts again for an alert waiting behind
   dirty_ = true;
 }
 
@@ -409,7 +425,7 @@ void Ui::updateBacklight(uint32_t nowMs) {
   // Screens that show something to scan or wait for stay bright.
   const bool fullScreen = wifi_->setupActive() || updating(ota_->state());
   const bool dim = settings_->dimAfterS != 0 && mode_ == Mode::Pages && !fullScreen &&
-                   !alertVisible_ && nowMs - lastInputMs_ >= settings_->dimAfterS * 1000UL;
+                   !alertShowing() && nowMs - lastInputMs_ >= settings_->dimAfterS * 1000UL;
   if (dim == dimmed_) return;
   dimmed_ = dim;
   tft_.setBrightness(dim ? kDimmedBrightness : backlight(settings_->brightness));

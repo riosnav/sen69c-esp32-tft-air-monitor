@@ -2,13 +2,14 @@
 //
 // Home Assistant over MQTT: announces the monitor through MQTT discovery (one
 // device with a sensor per value, a Good/Fair/Poor sensor per value with
-// limits, and the overall air quality) and publishes the readings every 30 s.
-// Topics, with <id> the host name, e.g. airmonitor-a1b2:
+// limits, the overall air quality, and the battery if one is installed) and
+// publishes the readings every 30 s. Topics, with <id> the host name, e.g.
+// airmonitor-a1b2:
 //
 //   homeassistant/device/<id>/config   discovery, retained
 //   <id>/status                        online / offline (last will), retained
 //   <id>/state                         {"co2": 612, "pm25": 3.1, ..., "levels": {"co2": "Good", ...},
-//                                       "air": "Good", "rssi": -60}
+//                                       "air": "Good", "rssi": -60, "battery": 78}
 //
 // ESP-IDF's MQTT client runs in its own task and reconnects by itself; the
 // rest runs in the main loop, and the web server reaches it under AppLock.
@@ -69,6 +70,7 @@ class MqttService {
   esp_mqtt_client_handle_t client_ = nullptr;
   Broker broker_;  // what client_ was started with
   char announcedName_[sizeof Settings::name] = "";
+  bool announcedBattery_ = false;
   uint32_t nextStartMs_ = 0;
   uint32_t lastStateMs_ = 0;
   MqttState loggedState_ = MqttState::Off;
