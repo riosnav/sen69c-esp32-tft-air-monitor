@@ -3,6 +3,7 @@
 #include "Web.h"
 
 #include <Arduino.h>
+#include <Ipv4.h>
 #include <cJSON.h>
 #include <esp_http_server.h>
 #include <lwip/sockets.h>
@@ -564,6 +565,25 @@ esp_err_t postAction(httpd_req_t* req) {
 
 // ---------------------------------------------------------------- Wi-Fi
 
+// A saved network's fixed address, or null for DHCP.
+void addAddress(cJSON* item, const FixedAddress& a) {
+  if (!a.set()) {
+    cJSON_AddNullToObject(item, "address");
+    return;
+  }
+  cJSON* address = cJSON_AddObjectToObject(item, "address");
+  char text[16];
+  const struct {
+    const char* key;
+    uint32_t value;
+  } parts[] = {{"ip", a.ip}, {"subnet", a.subnet}, {"gateway", a.gateway}, {"dns", a.dns}};
+  for (const auto& part : parts) {
+    text[0] = '\0';
+    if (part.value != 0) net::formatIpv4(part.value, text, sizeof text);
+    cJSON_AddStringToObject(address, part.key, text);
+  }
+}
+
 esp_err_t getWifi(httpd_req_t* req) {
   const bool hotspot = viaHotspot(req);
   Json root(cJSON_CreateObject());
@@ -584,6 +604,7 @@ esp_err_t getWifi(httpd_req_t* req) {
       cJSON* item = cJSON_CreateObject();
       cJSON_AddStringToObject(item, "ssid", w.saved()[i].ssid);
       cJSON_AddBoolToObject(item, "hidden", w.saved()[i].hidden);
+      addAddress(item, w.saved()[i].address);
       cJSON_AddItemToArray(saved, item);
     }
     cJSON_AddBoolToObject(r, "scanning", w.scanning());
@@ -624,6 +645,30 @@ const char* parseNetwork(const cJSON* json, WifiCredentials& network) {
   return nullptr;
 }
 
+// A fixed address from a request; an empty or missing "ip" means DHCP.
+const char* parseAddress(const cJSON* json, FixedAddress& out) {
+  out = FixedAddress();
+  const char* ip = stringField(json, "ip");
+  if (ip == nullptr || ip[0] == '\0') return nullptr;
+  const char* subnet = stringField(json, "subnet");
+  const char* gateway = stringField(json, "gateway");
+  const char* dns = stringField(json, "dns");
+  FixedAddress a;
+  if (!net::parseIpv4(ip, a.ip)) return "IP address: four numbers such as 192.168.1.20";
+  if (subnet == nullptr || !net::parseIpv4(subnet, a.subnet)) {
+    return "Subnet mask: four numbers such as 255.255.255.0";
+  }
+  if (gateway == nullptr || !net::parseIpv4(gateway, a.gateway)) {
+    return "Gateway: four numbers, usually your router's address";
+  }
+  if (dns != nullptr && dns[0] != '\0' && !net::parseIpv4(dns, a.dns)) {
+    return "DNS server: four numbers, or empty for the gateway";
+  }
+  if (const char* error = net::checkFixedAddress(a.ip, a.subnet, a.gateway, a.dns)) return error;
+  out = a;
+  return nullptr;
+}
+
 // Runs a POST /api/wifi action under AppLock; returns what's wrong, if anything.
 const char* wifiAction(const char* action, const cJSON* json) {
   WifiService& w = *ctx.wifi;
@@ -642,6 +687,11 @@ const char* wifiAction(const char* action, const cJSON* json) {
   } else if (strcmp(action, "forget") == 0) {
     const char* ssid = stringField(json, "ssid");
     if (ssid == nullptr || !w.forget(ssid)) return "No such network saved";
+  } else if (strcmp(action, "address") == 0) {
+    const char* ssid = stringField(json, "ssid");
+    FixedAddress address;
+    if (const char* error = parseAddress(json, address)) return error;
+    if (ssid == nullptr || !w.setAddress(ssid, address)) return "No such network saved";
   } else if (strcmp(action, "finish") == 0) {
     w.stopSetupSoon();
   } else {

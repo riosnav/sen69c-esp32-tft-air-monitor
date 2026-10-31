@@ -64,6 +64,11 @@ class WifiService {
   void save(const WifiCredentials& network);
   bool forget(const char* ssid);
   void forgetAll();
+  // A fixed address for a saved network (FixedAddress() for DHCP). Rejoins it
+  // if it's the network in use, so the new address applies at once.
+  bool setAddress(const char* ssid, const FixedAddress& address);
+  // Whether the network in use has a fixed address.
+  bool fixedAddress() const;
 
   // Setup hotspot.
   void startSetup();
@@ -105,6 +110,7 @@ class WifiService {
   void onConnected(uint32_t nowMs);
   void onAttemptFailed(uint32_t nowMs);
   void searchLater(uint32_t nowMs);
+  void rejoin(const char* ssid, uint32_t nowMs);
   void loopSetup(uint32_t nowMs);
   const char* failureReason() const;
 
@@ -115,6 +121,7 @@ class WifiService {
   bool mdnsStarted_ = false;
   WifiState state_ = WifiState::Off;
   char ssid_[33] = "";
+  bool staticIp_ = false;  // a fixed address is configured in the network stack
 
   // Joining saved networks.
   std::array<Attempt, WifiStore::kCapacity> attempts_{};

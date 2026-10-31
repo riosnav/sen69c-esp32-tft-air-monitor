@@ -7,6 +7,7 @@
 #include <ButtonLogic.h>
 #include <Comfort.h>
 #include <History.h>
+#include <Ipv4.h>
 #include <WifiChoice.h>
 #include <unity.h>
 
@@ -175,6 +176,40 @@ static void test_wifi_choice_ties_keep_saved_order() {
   TEST_ASSERT_EQUAL(0, net::chooseNetworks(saved, 2, scan, 0, out));
 }
 
+static void test_ipv4_parse_and_format() {
+  uint32_t a = 0;
+  TEST_ASSERT_TRUE(net::parseIpv4("192.168.1.20", a));
+  TEST_ASSERT_EQUAL_HEX32(0xC0A80114, a);
+  TEST_ASSERT_TRUE(net::parseIpv4("0.0.0.0", a));
+  TEST_ASSERT_EQUAL_HEX32(0, a);
+  for (const char* bad : {"", "192.168.1", "192.168.1.256", "192.168.1.20.", "1.2.3.4x", " 1.2.3.4",
+                          "1..2.3", "1.2.3.0004", "-1.2.3.4"}) {
+    TEST_ASSERT_FALSE_MESSAGE(net::parseIpv4(bad, a), bad);
+  }
+  char text[16];
+  net::formatIpv4(0xC0A80114, text, sizeof text);
+  TEST_ASSERT_EQUAL_STRING("192.168.1.20", text);
+}
+
+static void test_fixed_address_checks() {
+  uint32_t ip, mask, gw, dns;
+  net::parseIpv4("192.168.1.20", ip);
+  net::parseIpv4("255.255.255.0", mask);
+  net::parseIpv4("192.168.1.1", gw);
+  net::parseIpv4("1.1.1.1", dns);
+  TEST_ASSERT_NULL(net::checkFixedAddress(ip, mask, gw, 0));
+  TEST_ASSERT_NULL(net::checkFixedAddress(ip, mask, gw, dns));
+  TEST_ASSERT_NOT_NULL(net::checkFixedAddress(ip, 0xFFFF00FF, gw, 0));  // gaps in the mask
+  TEST_ASSERT_NOT_NULL(net::checkFixedAddress(ip, 0xFFFFFFFF, gw, 0));  // no room
+  TEST_ASSERT_NOT_NULL(net::checkFixedAddress(ip, 0x00FFFFFF, gw, 0));
+  TEST_ASSERT_NOT_NULL(net::checkFixedAddress(0xC0A80100, mask, gw, 0));  // network address
+  TEST_ASSERT_NOT_NULL(net::checkFixedAddress(0xC0A801FF, mask, gw, 0));  // broadcast
+  TEST_ASSERT_NOT_NULL(net::checkFixedAddress(ip, mask, 0xC0A80201, 0));  // gateway elsewhere
+  TEST_ASSERT_NOT_NULL(net::checkFixedAddress(ip, mask, ip, 0));
+  TEST_ASSERT_NOT_NULL(net::checkFixedAddress(0x7F000001, 0xFF000000, 0x7F000002, 0));  // loopback
+  TEST_ASSERT_NOT_NULL(net::checkFixedAddress(ip, mask, gw, 0xE0000001));  // multicast DNS server
+}
+
 static int runTests() {
   UNITY_BEGIN();
   RUN_TEST(test_level_unknown_for_nan);
@@ -188,6 +223,8 @@ static int runTests() {
   RUN_TEST(test_comfort_values);
   RUN_TEST(test_wifi_choice_strongest_first_then_hidden);
   RUN_TEST(test_wifi_choice_ties_keep_saved_order);
+  RUN_TEST(test_ipv4_parse_and_format);
+  RUN_TEST(test_fixed_address_checks);
   return UNITY_END();
 }
 

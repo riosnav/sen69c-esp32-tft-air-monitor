@@ -611,7 +611,7 @@ void Ui::drawNetwork() {
       frame_.setFont(kBody);
       y = 58;
       line((String(device::hostname()) + ".local").c_str(), theme::kMuted);
-      line(w.ip().toString().c_str(), theme::kMuted);
+      line((w.ip().toString() + (w.fixedAddress() ? "  fixed" : "")).c_str(), theme::kMuted);
       const String password = settings_->webPassword[0] != '\0'
                                   ? String("Web password  ") + settings_->webPassword
                                   : String("No web password");

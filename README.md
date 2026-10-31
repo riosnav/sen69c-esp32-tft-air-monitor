@@ -220,6 +220,9 @@ gauge reads the charger, so this is off by default.
 Notes:
 
 - Only 2.4 GHz networks work (an ESP32-S3 limitation).
+- The monitor gets its address from the router (DHCP). To give it a fixed one on a network, use *IP address* next
+  to that network on the web page; other networks still use DHCP. A router setting that always gives the monitor
+  the same address (often called a DHCP reservation) does the same without this.
 - Up to five networks are saved (saving a sixth drops the oldest). The monitor joins the strongest one in range
   and keeps looking, slowly, when none is. More networks can be added from the web page or by running the setup
   again.
@@ -301,6 +304,7 @@ first, or can't rejoin within 5 minutes, the monitor goes back to the previous f
 | The `.local` address doesn't open | Use the IP address shown on the Wi-Fi page, or its QR code (D1). |
 | Home Assistant doesn't connect | The Wi-Fi page shows the reason, e.g. "HA: Wrong user name or password" or "HA: Can't reach the broker"; check the settings on the web page. |
 | Lost the web password | It is shown on the monitor's Wi-Fi page. |
+| Can't reach the monitor after giving it a fixed address | Its Wi-Fi page shows the address it uses. To go back to DHCP, choose *Forget Wi-Fi* in its settings and set up Wi-Fi again. |
 | Start over | *Factory reset* in the settings. |
 
 ## For developers
@@ -323,8 +327,8 @@ sensor is on I²C address `0x6B`.
 ### Running the tests
 
 The hardware-independent logic (`lib/aqcore`: limits, history, buttons, comfort maths; `lib/netcore`: choosing
-which Wi-Fi network to join) has Unity tests that run on the board. With native USB the serial port disappears
-while the board restarts, so upload and test in two steps:
+which Wi-Fi network to join, checking fixed addresses) has Unity tests that run on the board. With native USB the
+serial port disappears while the board restarts, so upload and test in two steps:
 
 ```sh
 pio test --without-testing      # build and flash the test firmware

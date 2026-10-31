@@ -26,6 +26,10 @@ void WifiStore::load() {
     p.getString(key("ssid", i).c_str(), n.ssid, sizeof n.ssid);
     p.getString(key("pass", i).c_str(), n.password, sizeof n.password);
     n.hidden = p.getBool(key("hid", i).c_str(), false);
+    n.address.ip = p.getUInt(key("ip", i).c_str(), 0);  // absent: DHCP
+    n.address.subnet = p.getUInt(key("mask", i).c_str(), 0);
+    n.address.gateway = p.getUInt(key("gw", i).c_str(), 0);
+    n.address.dns = p.getUInt(key("dns", i).c_str(), 0);
     if (n.ssid[0] != '\0') ++count_;
   }
   p.end();
@@ -39,6 +43,8 @@ const WifiCredentials* WifiStore::find(const char* ssid) const {
 }
 
 void WifiStore::add(WifiCredentials network) {
+  const WifiCredentials* old = find(network.ssid);
+  if (old != nullptr && !network.address.set()) network.address = old->address;
   remove(network.ssid);
   if (count_ == kCapacity) --count_;
   std::move_backward(networks_.begin(), networks_.begin() + count_,
@@ -46,6 +52,16 @@ void WifiStore::add(WifiCredentials network) {
   networks_[0] = network;
   ++count_;
   save();
+}
+
+bool WifiStore::setAddress(const char* ssid, const FixedAddress& address) {
+  for (size_t i = 0; i < count_; ++i) {
+    if (strcmp(networks_[i].ssid, ssid) != 0) continue;
+    networks_[i].address = address;
+    save();
+    return true;
+  }
+  return false;
 }
 
 bool WifiStore::forget(const char* ssid) {
@@ -78,6 +94,12 @@ void WifiStore::save() const {
     p.putString(key("ssid", i).c_str(), networks_[i].ssid);
     p.putString(key("pass", i).c_str(), networks_[i].password);
     p.putBool(key("hid", i).c_str(), networks_[i].hidden);
+    const FixedAddress& a = networks_[i].address;
+    if (!a.set()) continue;
+    p.putUInt(key("ip", i).c_str(), a.ip);
+    p.putUInt(key("mask", i).c_str(), a.subnet);
+    p.putUInt(key("gw", i).c_str(), a.gateway);
+    p.putUInt(key("dns", i).c_str(), a.dns);
   }
   p.end();
 }

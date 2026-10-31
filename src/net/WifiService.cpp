@@ -25,6 +25,9 @@ constexpr size_t kHotspotPasswordLength = 8;
 
 bool due(uint32_t nowMs, uint32_t atMs) { return static_cast<int32_t>(nowMs - atMs) >= 0; }
 
+// From FixedAddress's form, first part in the top byte.
+IPAddress ipAddress(uint32_t a) { return IPAddress(a >> 24, a >> 16 & 0xFF, a >> 8 & 0xFF, a & 0xFF); }
+
 // AUTH_EXPIRE is also what a router sends when it rejects the key: a wrong
 // password during setup (hotspot up) came back as that rather than as a
 // handshake timeout.
@@ -94,17 +97,7 @@ void WifiService::loop(uint32_t nowMs) {
     case WifiState::Connected:
       if (WiFi.status() != WL_CONNECTED) {
         Serial.printf("Wi-Fi: lost %s\n", ssid_);
-        // Try the same network again first, then scan.
-        const WifiCredentials* network = store_.find(ssid_);
-        if (network != nullptr) {
-          attempts_[0] = Attempt();
-          attempts_[0].network = *network;
-          attemptCount_ = 1;
-          nextAttempt_ = 0;
-          connectNext(nowMs);
-        } else {
-          searchLater(nowMs);
-        }
+        rejoin(ssid_, nowMs);  // the same network first, then scan
       }
       break;
     case WifiState::Off:
@@ -224,6 +217,15 @@ void WifiService::connectNext(uint32_t nowMs) {
   WiFi.disconnect();
   failures_ = 0;
   lastReason_ = 0;
+  const FixedAddress& f = a.network.address;
+  if (f.set()) {
+    WiFi.config(ipAddress(f.ip), ipAddress(f.gateway), ipAddress(f.subnet),
+                ipAddress(f.dns != 0 ? f.dns : f.gateway));
+    staticIp_ = true;
+  } else if (staticIp_) {
+    WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);  // back to DHCP
+    staticIp_ = false;
+  }
   WiFi.begin(a.network.ssid, a.network.password, a.channel, a.hasBssid ? a.bssid : nullptr);
   attemptStartMs_ = nowMs;
   state_ = WifiState::Connecting;
@@ -279,6 +281,20 @@ void WifiService::onAttemptFailed(uint32_t nowMs) {
   connectNext(nowMs);
 }
 
+// Tries the saved network `ssid` alone, then scans if that fails.
+void WifiService::rejoin(const char* ssid, uint32_t nowMs) {
+  const WifiCredentials* network = store_.find(ssid);
+  if (network == nullptr) {
+    searchLater(nowMs);
+    return;
+  }
+  attempts_[0] = Attempt();
+  attempts_[0].network = *network;
+  attemptCount_ = 1;
+  nextAttempt_ = 0;
+  connectNext(nowMs);
+}
+
 void WifiService::searchLater(uint32_t nowMs) {
   state_ = WifiState::Searching;
   ssid_[0] = '\0';
@@ -312,6 +328,22 @@ bool WifiService::forget(const char* ssid) {
     searchLater(millis());
   }
   return true;
+}
+
+bool WifiService::setAddress(const char* ssid, const FixedAddress& address) {
+  if (!store_.setAddress(ssid, address)) return false;
+  const bool inUse = state_ == WifiState::Connected || state_ == WifiState::Connecting;
+  if (inUse && !setupActive() && strcmp(ssid, ssid_) == 0) {
+    Serial.printf("Wi-Fi: new address for %s; rejoining\n", ssid_);
+    rejoin(ssid_, millis());
+  }
+  return true;
+}
+
+bool WifiService::fixedAddress() const {
+  if (state_ != WifiState::Connected) return false;
+  const WifiCredentials* network = store_.find(ssid_);
+  return network != nullptr && network->address.set();
 }
 
 void WifiService::forgetAll() {
@@ -384,6 +416,8 @@ void WifiService::stopSetupSoon() {
 void WifiService::tryNetwork(const WifiCredentials& network) {
   if (!setupActive()) return;
   trial_ = network;
+  // Joins with the fixed address the network already has, if any.
+  if (const WifiCredentials* saved = store_.find(network.ssid)) trial_.address = saved->address;
   trialPending_ = true;
   setup_ = SetupState::Testing;
   setupMessage_ = "";

@@ -140,6 +140,20 @@ footer { color: var(--muted); font-size: 12px; margin-top: 30px; }
     <p id="wifi-status"></p>
     <p class="hint">The monitor joins the strongest saved network in range, and works without Wi-Fi elsewhere.</p>
     <ul id="saved" class="saved"></ul>
+    <form id="address" hidden>
+      <p><strong id="address-title"></strong></p>
+      <label class="check"><input type="radio" name="mode" value="dhcp"> Automatic, from the router (DHCP)</label>
+      <label class="check"><input type="radio" name="mode" value="fixed"> Fixed address</label>
+      <div id="address-fields">
+        <label>IP address <input type="text" name="ip" inputmode="decimal" placeholder="192.168.1.20" spellcheck="false"></label>
+        <label>Subnet mask <input type="text" name="subnet" inputmode="decimal" placeholder="255.255.255.0" spellcheck="false"></label>
+        <label>Gateway (your router) <input type="text" name="gateway" inputmode="decimal" placeholder="192.168.1.1" spellcheck="false"></label>
+        <label>DNS server (optional) <input type="text" name="dns" inputmode="decimal" placeholder="the gateway" spellcheck="false"></label>
+        <p class="hint">Pick an address outside the range your router hands out. If the monitor can't be reached afterwards, its Wi-Fi page still shows the address; <em>Forget Wi-Fi</em> in its settings removes it.</p>
+      </div>
+      <div class="row"><button class="primary">Save</button><button type="button" class="plain" id="address-cancel">Cancel</button></div>
+      <p id="address-msg" class="msg"></p>
+    </form>
     <form id="add-network">
       <label>Add a network <input type="text" name="ssid" maxlength="32" placeholder="Network name" autocapitalize="none" required></label>
       <label>Password <input type="password" name="password" maxlength="64" autocomplete="off" placeholder="none for an open network"></label>
@@ -851,7 +865,12 @@ async function loadWifi() {
   $('#saved').replaceChildren(...w.saved.map((n) => {
     const li = document.createElement('li');
     const name = document.createElement('span');
-    name.textContent = n.ssid + (n.hidden ? ' (hidden)' : '');
+    name.textContent = n.ssid + (n.hidden ? ' (hidden)' : '') + (n.address ? `, fixed address ${n.address.ip}` : '');
+    const address = document.createElement('button');
+    address.type = 'button';
+    address.className = 'plain';
+    address.textContent = 'IP address';
+    address.addEventListener('click', () => editAddress(n, w.state === 'connected' && n.ssid === w.ssid));
     const forget = document.createElement('button');
     forget.type = 'button';
     forget.className = 'plain';
@@ -866,10 +885,56 @@ async function loadWifi() {
         message('wifi-msg', err.message, true);
       }
     });
-    li.append(name, forget);
+    const buttons = document.createElement('span');
+    buttons.className = 'row';
+    buttons.append(address, forget);
+    li.append(name, buttons);
     return li;
   }));
 }
+
+// The fixed address form, for one saved network at a time.
+let addressFor = null;
+
+function editAddress(network, inUse) {
+  const form = $('#address');
+  const f = form.elements;
+  const a = network.address;
+  addressFor = network.ssid;
+  form.dataset.inUse = inUse ? 'yes' : '';
+  $('#address-title').textContent = `IP address on ${network.ssid}`;
+  f.mode.value = a ? 'fixed' : 'dhcp';
+  f.ip.value = a ? a.ip : '';
+  f.subnet.value = a ? a.subnet : '255.255.255.0';
+  f.gateway.value = a ? a.gateway : '';
+  f.dns.value = a ? a.dns : '';
+  showAddressFields();
+  message('address-msg', '');
+  form.hidden = false;
+}
+
+function showAddressFields() {
+  $('#address-fields').hidden = $('#address').elements.mode.value !== 'fixed';
+}
+
+$('#address').addEventListener('change', showAddressFields);
+$('#address-cancel').addEventListener('click', () => { $('#address').hidden = true; });
+$('#address').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.target.elements;
+  const fixed = f.mode.value === 'fixed';
+  const body = { action: 'address', ssid: addressFor, ip: fixed ? f.ip.value.trim() : '' };
+  if (fixed) Object.assign(body, { subnet: f.subnet.value.trim(), gateway: f.gateway.value.trim(), dns: f.dns.value.trim() });
+  try {
+    await post('/api/wifi', body);
+    if (!e.target.dataset.inUse) message('address-msg', 'Saved. It applies the next time the monitor joins this network.');
+    else if (fixed) message('address-msg', `Saved. The monitor reconnects now; if this page stops updating, open http://${body.ip}/`);
+    else message('address-msg', 'Saved. The monitor reconnects now; its Wi-Fi page shows the address it gets.');
+    loadWifi().catch(() => {});
+  } catch (err) {
+    message('address-msg', err.message, true);
+  }
+});
 
 $('#add-network').addEventListener('submit', async (e) => {
   e.preventDefault();
