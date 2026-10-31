@@ -19,3 +19,7 @@ texts ship with each component's source, which the build downloads; release bina
 
 Build tooling (pioarduino / PlatformIO, the GCC toolchain, esptool) is used to build the firmware but
 is not part of it.
+
+The screen renderer in [tools/screen-renderer](tools/screen-renderer) is built from the firmware's UI
+code and the same LovyanGFX 1.2.33, which its build downloads. LovyanGFX includes miniz (MIT), which the
+renderer uses to write PNG files.

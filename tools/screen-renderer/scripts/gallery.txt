@@ -1,0 +1,225 @@
+# Every screen of the monitor. From tools/screen-renderer (see README.md):
+#   screen-renderer --scale 3 --out shots scripts/gallery.txt
+
+# The pages, in good air, with Home Assistant connected
+ha connected
+shot pages/1-overview.png
+page particles
+shot pages/2-particles.png
+page gases
+shot pages/3-gases.png
+page comfort
+shot pages/4-comfort.png
+page hour
+shot pages/5-trend-hour.png
+page day
+shot pages/6-trend-day.png
+page wifi
+shot pages/7-wifi.png
+page device
+shot pages/8-device.png
+
+# More trends (D1 on a trend page picks the next value)
+page day
+trend pm2.5
+shot trends/day-pm25.png
+page hour
+trend temp
+shot trends/hour-temp.png
+history none
+shot trends/collecting.png
+history full
+
+# Fair and poor air (going to a page closes the alerts on the way)
+air fair
+page overview
+shot air/overview-fair.png
+air poor
+page overview
+shot air/overview-poor.png
+page particles
+shot air/particles-poor.png
+page gases
+shot air/gases-poor.png
+page comfort
+shot air/comfort-poor.png
+setting units f
+shot air/comfort-poor-fahrenheit.png
+setting units c
+
+# Alerts pop up when a value gets worse
+air good
+page overview
+set co2 1720
+wait 1s
+shot alerts/co2.png
+dismiss
+set pm2.5 38
+wait 1s
+shot alerts/particles.png
+dismiss
+set rh 74
+wait 1s
+shot alerts/humidity.png
+dismiss
+set temp 15.2
+wait 1s
+shot alerts/cold.png
+dismiss
+air good
+
+# The sensor
+sensor busy "Cleaning fan"
+shot sensor/busy.png
+sensor measuring
+sensor-status 0x10
+page device
+shot sensor/fan-error.png
+click d1
+shot sensor/errors-cleared.png
+logins 4
+shot sensor/wrong-passwords.png
+logins 0
+sensor not-found
+shot sensor/not-found.png
+sensor measuring
+battery 3.92 78
+shot sensor/battery.png
+setting battery off
+
+# Running on battery (the last number is the charge rate, in % per hour)
+wait 5s
+battery 4.05 86 12
+shot battery/1-charging.png
+battery 3.71 34 -9
+shot battery/2-in-use.png
+battery 3.68 19 -9
+shot battery/3-low.png
+dismiss
+battery 3.62 9 -9
+shot battery/4-very-low.png
+dismiss
+page device
+shot battery/5-device-very-low.png
+battery 3.48 3 -9
+wait 61s
+shot battery/6-empty.png
+setting battery off
+power-on
+
+# The settings menu (it opens over the page showing, here the overview)
+page overview
+menu brightness
+shot menu/1-top.png
+menu altitude
+shot menu/2-altitude.png
+click d1
+click d0
+click d0
+shot menu/3-editing-altitude.png
+click d1
+menu clean-fan
+click d1
+shot menu/4-confirm-clean-fan.png
+hold d1
+wait 1s
+shot menu/5-cleaning-fan.png
+wait 12s
+shot menu/6-fan-cleaned.png
+menu calibrate-co2
+click d1
+shot menu/7-confirm-calibrate-co2.png
+click d0
+menu factory-reset
+click d1
+shot menu/8-confirm-factory-reset.png
+click d0
+menu reset-co2
+shot menu/9-sensor-items.png
+click d1
+shot menu/10-confirm-reset-co2.png
+click d0
+menu heat-humidity-sensor
+click d1
+shot menu/11-confirm-heat.png
+hold d1
+wait 1s
+shot menu/12-heating.png
+wait 23s
+shot menu/13-heated.png
+wait 5s
+menu power-off
+click d1
+shot menu/14-confirm-power-off.png
+hold d1
+shot menu/15-switching-off.png
+power-on
+
+# The Wi-Fi page
+page wifi
+click d1
+shot wifi/qr-code.png
+page wifi
+ha failed "Can't reach the broker"
+shot wifi/ha-failed.png
+ha connected
+fixed-ip on
+shot wifi/fixed-address.png
+fixed-ip off
+wifi connecting HomeNetwork
+shot wifi/connecting.png
+wifi searching
+shot wifi/searching.png
+wifi failed HomeNetwork "Wrong password?"
+shot wifi/failed.png
+setting wifi off
+shot wifi/off.png
+setting wifi on
+saved
+shot wifi/not-set-up.png
+
+# Wi-Fi setup with a phone: D1 on the Wi-Fi page starts it
+click d1
+shot setup/1-waiting.png
+setup joined
+shot setup/2-joined.png
+setup testing HomeNetwork
+shot setup/3-testing.png
+setup failed "Wrong password?"
+shot setup/4-failed.png
+setup succeeded
+shot setup/5-succeeded.png
+setup off
+
+# A firmware update from the web page: received, then it waits for a long
+# press on the monitor
+update 42
+shot update/1-progress.png
+update confirm
+wait 5s
+shot update/2-confirm.png
+down d1
+wait 2s
+shot update/3-holding.png
+wait 4s
+shot update/4-accepted.png
+up d1
+update confirm
+click d0
+shot update/5-refused.png
+update confirm
+wait 121s
+shot update/6-timed-out.png
+update off
+
+# Just switched on: some values not measured yet, then formaldehyde still
+# settling and little history
+uptime 30s
+air warm-up
+shot sensor/warm-up.png
+uptime 4m
+air good
+page device
+shot sensor/just-started.png
+page hour
+shot trends/just-started.png

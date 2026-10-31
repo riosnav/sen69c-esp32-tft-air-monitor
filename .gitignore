@@ -5,6 +5,9 @@ platformio_override.ini
 # Generated from web/ at build time
 src/web/WebAssets.h
 
+# Screen renderer output, if written next to it
+tools/screen-renderer/shots/
+
 # VS Code (keep only the shared extension recommendations)
 .vscode/*
 !.vscode/extensions.json

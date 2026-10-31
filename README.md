@@ -355,6 +355,12 @@ pio test --without-uploading    # read the results (within 15 s)
 pio run -t upload               # put the normal firmware back
 ```
 
+### Screen renderer
+
+[tools/screen-renderer](tools/screen-renderer) draws the monitor's screen on a PC (Linux or Windows) and saves it
+as PNG files, from the firmware's own UI code: to see every screen without the hardware, or to check a change to
+the UI. The screenshot at the top of this README comes from it. Its README explains how to build and run it.
+
 ### JSON API and MQTT topics
 
 The web page uses a small JSON API (`/api/state`, `/api/history?metric=co2&range=hour|day`, `/api/settings`,
