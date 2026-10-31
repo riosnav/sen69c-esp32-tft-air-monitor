@@ -1,7 +1,9 @@
 # SEN69C Air Monitor
 
-Firmware for a small indoor air-quality monitor that you assemble from three plug-together boards, with no
-soldering. It measures particles (PM1, PM2.5, PM4, PM10), carbon dioxide (CO₂), formaldehyde, volatile organic
+Firmware for a small indoor air-quality monitor built from an **Adafruit ESP32-S3 Reverse TFT Feather** (an
+ESP32-S3 microcontroller board with a built-in screen and three buttons) and a **Sensirion SEN69C** sensor module,
+connected through Adafruit's SEN6x breakout board. The three boards plug together with cables, with no soldering
+(see [What you need](#what-you-need)). It measures particles (PM1, PM2.5, PM4, PM10), carbon dioxide (CO₂), formaldehyde, volatile organic
 compounds and nitrogen oxides (as VOC and NOₓ indices), temperature and humidity. It shows them on its built-in
 screen with green, amber and red levels, and warns you when the air gets unhealthy. Over Wi-Fi it adds a web page
 and can send everything to Home Assistant; without Wi-Fi it works just the same. Its warnings are on the screen
