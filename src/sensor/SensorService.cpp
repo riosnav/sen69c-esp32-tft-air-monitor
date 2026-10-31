@@ -30,6 +30,9 @@ bool remembered(uint32_t settings) {
 }
 
 constexpr uint8_t kAddrMax17048 = 0x36;
+// The MAX17048's power-on HIBRT: it hibernates (about 3 uA instead of 23 uA)
+// while the battery is hardly used.
+constexpr uint16_t kGaugeHibernateDefault = 0x8030;
 // Raw values the SEN69C returns while a measurement isn't available yet.
 constexpr uint16_t kUnknownU16 = 0xFFFF;
 constexpr int16_t kUnknownI16 = 0x7FFF;
@@ -118,6 +121,11 @@ void SensorService::recalibrateCo2(uint16_t referencePpm) {
 void SensorService::resetCo2Calibration() { send({CommandType::ResetCo2Calibration, {}, 0}); }
 
 void SensorService::clearErrors() { send({CommandType::ClearErrors, {}, 0}); }
+
+void SensorService::powerDown(uint32_t timeoutMs) {
+  send({CommandType::PowerDown, {}, 0});
+  for (uint32_t start = millis(); !poweredDown_ && millis() - start < timeoutMs;) delay(10);
+}
 
 void SensorService::send(const Command& cmd) {
   if (xQueueSend(queue_, &cmd, 0) != pdTRUE) setResult("Sensor busy, try again");
@@ -342,6 +350,11 @@ void SensorService::handle(const Command& cmd) {
       setResult(cleared ? "Sensor errors cleared" : "Could not clear the errors");
       return;
     }
+    case CommandType::PowerDown:
+      writeRegister16(kAddrMax17048, 0x0A, kGaugeHibernateDefault);
+      poweredDown_ = true;
+      vTaskSuspend(nullptr);  // until the power goes
+      return;
   }
   // If the sensor didn't come back, make run() look for it again.
   if (!restarted) consecutiveErrors_ = kMaxConsecutiveErrors;

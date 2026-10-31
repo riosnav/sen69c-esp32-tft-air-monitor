@@ -201,6 +201,7 @@ in memory and start over after a restart or update.
 | Clean fan | Runs the sensor's fan at full speed for 10 s to blow out dust. The sensor doesn't do this by itself. |
 | Heat humidity sensor | Heats the humidity sensor for a second. After a long time in very humid air (a bathroom, a damp cellar) the humidity reads too high; this fixes it. Readings pause for about a minute. |
 | Restart | Restarts the monitor. |
+| Power off | Switches the monitor off, e.g. to carry it around on its battery. To turn it on again, hold **D1** or **D2** for 2 s, then let go; USB power alone doesn't. Switched off, it still draws a little (about 0.1 mA), so a battery lasts weeks to months. For longer, unplug the battery. |
 | Factory reset | Erases all settings, saved Wi-Fi networks, the web password and the Home Assistant settings. |
 
 If a LiPo battery is connected, tick *A battery is connected* on the web page (*Settings → Display and sensor*;

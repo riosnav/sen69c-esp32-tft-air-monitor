@@ -11,6 +11,8 @@
 #include <freertos/queue.h>
 #include <freertos/semphr.h>
 
+#include <atomic>
+
 enum class SensorState : uint8_t {
   Starting,   // looking for the sensor
   Measuring,
@@ -67,6 +69,9 @@ class SensorService {
   void resetCo2Calibration();
   // Most error flags stay set until cleared, even once the error is gone.
   void clearErrors();
+  // Before powering off: lets the battery monitor hibernate again and stops
+  // using the bus. Waits up to `timeoutMs` for the sensor task to get there.
+  void powerDown(uint32_t timeoutMs);
 
  private:
   enum class CommandType : uint8_t {
@@ -76,6 +81,7 @@ class SensorService {
     RecalibrateCo2,
     ResetCo2Calibration,
     ClearErrors,
+    PowerDown,
   };
   struct Command {
     CommandType type;
@@ -105,6 +111,7 @@ class SensorService {
   uint32_t startedMs_ = 0;
   uint32_t consecutiveErrors_ = 0;
   bool gaugeAwake_ = false;  // the battery monitor's hibernation is off
+  std::atomic<bool> poweredDown_{false};
 
   mutable SemaphoreHandle_t mutex_ = nullptr;
   QueueHandle_t queue_ = nullptr;

@@ -20,6 +20,7 @@ constexpr uint8_t kAddrMax17048 = 0x36;
 constexpr uint32_t kRailMs = 10;      // for the I2C rail to come up
 constexpr uint32_t kMessageMs = 4000;  // how long a button shows why nothing starts
 constexpr uint8_t kMessageBrightness = 150;  // of 255
+constexpr uint32_t kReleaseTimeoutMs = 10000;
 constexpr uint8_t kWakeButtons[] = {1, 2};  // D1 and D2 read high while pressed
 
 // Off while asleep: the backlight, the regulator for the screen and the
@@ -28,10 +29,32 @@ const gpio_num_t kPowerPins[] = {static_cast<gpio_num_t>(TFT_BACKLITE),
                                  static_cast<gpio_num_t>(TFT_I2C_POWER),
                                  static_cast<gpio_num_t>(NEOPIXEL_POWER)};
 
-enum class Off : uint8_t { No, ForBattery };
+enum class Off : uint8_t { No, ByUser, ForBattery };
 
 // Why it's asleep. Kept through deep sleep, but not through a reset or a power cut.
 RTC_DATA_ATTR Off asleep = Off::No;
+
+bool buttonPressed() {
+  for (uint8_t pin : kWakeButtons) {
+    if (digitalRead(pin) == HIGH) return true;
+  }
+  return false;
+}
+
+// Whether D1 or D2, which woke the chip, stays pressed until `ms` after the
+// wake (millis() counts from it).
+bool heldUntil(uint32_t ms) {
+  for (uint8_t pin : kWakeButtons) pinMode(pin, INPUT_PULLDOWN);
+  while (millis() < ms) {
+    if (!buttonPressed()) return false;
+    delay(10);
+  }
+  return true;
+}
+
+void waitForRelease() {
+  for (uint32_t start = millis(); buttonPressed() && millis() - start < kReleaseTimeoutMs;) delay(10);
+}
 
 bool readRegister16(uint8_t reg, uint16_t& value) {
   Wire.beginTransmission(kAddrMax17048);
@@ -99,12 +122,25 @@ void begin() {
   if (why == Off::No || (cause != ESP_SLEEP_WAKEUP_TIMER && cause != ESP_SLEEP_WAKEUP_EXT1)) {
     return;  // started as usual (power on, reset)
   }
+  if (why == Off::ByUser) {
+    if (heldUntil(kHoldToStartMs)) {
+      waitForRelease();  // or the UI would take the press as its own
+      return;
+    }
+    sleep(Off::ByUser);  // a brief press, e.g. in a bag
+  }
   float volts = NAN;
   float ratePerHour = NAN;
   readBattery(volts, ratePerHour);
   if (powerIsBack(volts, ratePerHour)) return;
   if (cause == ESP_SLEEP_WAKEUP_EXT1) showEmpty();
   sleep(Off::ForBattery);
+}
+
+void powerOff() {
+  waitForRelease();  // the press that confirmed would wake it at once
+  WiFi.mode(WIFI_OFF);
+  sleep(Off::ByUser);
 }
 
 void shutDownForBattery() {

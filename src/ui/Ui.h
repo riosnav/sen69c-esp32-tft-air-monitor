@@ -35,6 +35,8 @@ class Ui {
   void settingsChanged() { settingsChanged_ = true; }
   // Says the monitor is switching off for an empty battery, at once and for good.
   void showBatteryEmpty();
+  // Power off was chosen in the menu; the screen says how to turn it on again.
+  bool powerOffRequested() const { return poweringOff_; }
 
  private:
   enum class Mode : uint8_t { Pages, Menu, Edit, Confirm, Link };
@@ -66,6 +68,7 @@ class Ui {
     CleanFan,
     HeatHumiditySensor,
     Restart,
+    PowerOff,
     FactoryReset,
     Close,
     Count
@@ -115,6 +118,7 @@ class Ui {
   void drawLink();
   void drawUpdate();
   void drawUpdatePrompt(uint32_t nowMs);
+  void drawPoweringOff();
   int drawQr(const char* text);
   void drawMenu();
   void drawConfirm();
@@ -163,6 +167,7 @@ class Ui {
   uint8_t batteryAlert_ = 0;
   uint8_t batteryAcknowledged_ = 0;
   bool batteryEmpty_ = false;
+  bool poweringOff_ = false;
 
   uint32_t lastInputMs_ = 0;
   bool dimmed_ = false;

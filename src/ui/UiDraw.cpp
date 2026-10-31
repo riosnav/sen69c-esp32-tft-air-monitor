@@ -42,7 +42,7 @@ constexpr const char* kItemLabels[] = {
     "Wi-Fi",        "Set up Wi-Fi", "Forget Wi-Fi",
     "Temp. offset", "Altitude",     "CO_2 self-calibration", "Calibrate CO_2",
     "Reset CO_2 calibration", "Clean fan", "Heat humidity sensor",
-    "Restart",      "Factory reset", "Close",
+    "Restart",      "Power off",    "Factory reset", "Close",
 };
 
 const char* label(Metric m) {
@@ -186,8 +186,12 @@ void Ui::draw(uint32_t nowMs) {
 
   frame_.fillScreen(theme::kBackground);
   // These take over the whole screen.
-  if (batteryEmpty_) {
-    drawBatteryEmpty(frame_);
+  if (batteryEmpty_ || poweringOff_) {
+    if (batteryEmpty_) {
+      drawBatteryEmpty(frame_);
+    } else {
+      drawPoweringOff();
+    }
     frame_.pushSprite(0, 0);
     return;
   }
@@ -937,6 +941,11 @@ void Ui::drawConfirm() {
     case Item::Restart:
       title = "Restart?";
       break;
+    case Item::PowerOff:
+      title = "Power off?";
+      line1 = "Uses almost no battery.";
+      line2 = "Hold D1 or D2 to turn it on.";
+      break;
     case Item::FactoryReset:
       title = "Factory reset?";
       line1 = "Restores the default settings";
@@ -1011,6 +1020,16 @@ void Ui::drawAlert() {
   drawRich(frame_, advice, x + 8, y + 85, theme::kText);
   frame_.setFont(kSmall);
   drawRich(frame_, "Press any button", x + 8, y + 104, theme::kMuted);
+}
+
+void Ui::drawPoweringOff() {
+  frame_.setFont(kMedium);
+  drawRich(frame_, "Switching off", kLeft, 30, theme::kText);
+  frame_.setFont(kBody);
+  drawRich(frame_, "To turn it on again, hold", kLeft, 62, theme::kMuted);
+  const String hold = "D1 or D2 for " + String(power::kHoldToStartMs / 1000) + " s.";
+  drawRich(frame_, hold.c_str(), kLeft, 78, theme::kMuted);
+  drawRich(frame_, "Let go of the button now.", kLeft, 110, theme::kAccent);
 }
 
 // Like an air alert, for a battery running low.

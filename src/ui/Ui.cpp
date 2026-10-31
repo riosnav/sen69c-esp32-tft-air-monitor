@@ -287,6 +287,7 @@ void Ui::select(Item item) {
     case Item::ResetCo2:
     case Item::ForgetWifi:
     case Item::Restart:
+    case Item::PowerOff:
     case Item::FactoryReset:
       confirmItem_ = item;
       mode_ = Mode::Confirm;
@@ -359,6 +360,9 @@ void Ui::execute(Item item) {
       break;
     case Item::Restart:
       ESP.restart();
+      break;
+    case Item::PowerOff:
+      poweringOff_ = true;  // the main loop switches off
       break;
     case Item::FactoryReset:
       settings::erase();

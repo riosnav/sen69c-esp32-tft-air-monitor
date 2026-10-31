@@ -28,6 +28,9 @@ namespace {
 constexpr uint32_t kLogIntervalMs = 10000;
 // How long the screen says why, before switching off.
 constexpr uint32_t kEmptyMessageMs = 5000;
+constexpr uint32_t kOffMessageMs = 3000;
+// The sensor task may be busy for a while, e.g. heating the humidity sensor.
+constexpr uint32_t kSensorStopMs = 2000;
 
 // Owned by the main loop; the web server reaches them under AppLock.
 Settings userSettings;
@@ -120,6 +123,7 @@ void loop() {
   static uint32_t lastLogMs = 0;
   const uint32_t now = millis();
   bool batteryEmpty = false;
+  bool powerOff = false;
   {
     AppLock lock;
     sensor.snapshot(latest);
@@ -155,11 +159,20 @@ void loop() {
                     latest.batteryVolts);
       ui.showBatteryEmpty();
       mqtt.shutDown();  // so Home Assistant shows it as unavailable at once
+    } else if (ui.powerOffRequested()) {
+      powerOff = true;
+      Serial.println("Powering off until D1 or D2 is held");
+      mqtt.shutDown();
     }
   }
   if (batteryEmpty) {
     delay(kEmptyMessageMs);
     power::shutDownForBattery();
+  }
+  if (powerOff) {
+    sensor.powerDown(kSensorStopMs);
+    delay(kOffMessageMs);
+    power::powerOff();
   }
   sys::loop(now);
   delay(5);
