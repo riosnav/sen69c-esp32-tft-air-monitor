@@ -245,10 +245,13 @@ void Ui::draw(uint32_t nowMs) {
 
 void Ui::drawTitle(const char* title) {
   frame_.setFont(kBody);
-  drawRich(frame_, title, kLeft, kTitleBaseline, theme::kAccent);
+  const int titleRight = kLeft + drawRich(frame_, title, kLeft, kTitleBaseline, theme::kAccent);
   // Right side: what the sensor is doing if it's busy, else the overall level.
   if (snapshot_.state == SensorState::Busy) {
-    drawRichRight(frame_, snapshot_.activity, kRight, kTitleBaseline, theme::kWarning);
+    // Beside a long title there's only room for a short word.
+    const char* activity = snapshot_.activity;
+    if (richWidth(frame_, activity) > kRight - titleRight - 8) activity = "Busy";
+    drawRichRight(frame_, activity, kRight, kTitleBaseline, theme::kWarning);
   } else if (snapshot_.state == SensorState::NotFound) {
     drawRichRight(frame_, "No sensor", kRight, kTitleBaseline, theme::kAlarm);
   } else {
