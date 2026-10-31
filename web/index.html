@@ -167,6 +167,10 @@ footer { color: var(--muted); font-size: 12px; margin-top: 30px; }
 
   <details class="card">
     <summary>Maintenance</summary>
+    <div class="task" id="errors-task" hidden>
+      <div><strong>Clear the sensor's errors</strong><p class="hint">The sensor keeps reporting an error until it's cleared, even once it's gone. If it comes back, it's still there.</p></div>
+      <button type="button" class="plain" id="clear-errors">Clear</button>
+    </div>
     <div class="task">
       <div><strong>Clean the fan</strong><p class="hint">Full speed for 10 s to blow out dust; readings pause for about 40 s.</p></div>
       <button type="button" class="plain" id="clean-fan">Clean</button>
@@ -390,6 +394,15 @@ function message(id, text, error = false) {
   el.classList.toggle('error', error);
 }
 
+// The sensor's status bits that mean something is wrong (SEN6x datasheet).
+const STATUS_FLAGS = [[4, 'fan'], [21, 'fan speed'], [6, 'humidity/temperature'], [7, 'VOC/NOₓ'],
+  [9, 'CO₂'], [12, 'CO₂'], [10, 'formaldehyde'], [11, 'particles']];
+
+function statusText(value) {
+  const names = [...new Set(STATUS_FLAGS.filter(([bit]) => value & (1 << bit)).map(([, name]) => name))];
+  return names.length ? `error: ${names.join(', ')}` : `device status 0x${value.toString(16)}`;
+}
+
 function duration(seconds) {
   const minutes = Math.floor(seconds / 60), hours = Math.floor(minutes / 60), days = Math.floor(hours / 24);
   if (minutes < 1) return 'less than a minute';
@@ -538,7 +551,8 @@ function renderState() {
   const sensor = s.sensor;
   let status = { measuring: 'Measuring', busy: sensor.activity, starting: 'Starting', 'not found': 'Not found' }[sensor.state];
   if (sensor.state === 'measuring') status += ' for ' + duration(sensor.measuringFor);
-  if (sensor.status) status += `, device status 0x${sensor.status.toString(16)}`;
+  if (sensor.status) status += ', ' + statusText(sensor.status);
+  $('#errors-task').hidden = !sensor.status;
   if (sensor.error) status += `, I²C error ${sensor.error}`;
   const rows = [
     ['Sensor', sensor.product ? `${sensor.product}, firmware ${sensor.firmware}` : 'not found'],
@@ -912,6 +926,8 @@ async function action(body, done) {
   }
 }
 
+$('#clear-errors').addEventListener('click', () =>
+  action({ action: 'clearErrors' }, 'Cleared. If an error comes back, it is still there.'));
 $('#clean-fan').addEventListener('click', () =>
   action({ action: 'cleanFan' }, 'Fan cleaning started; readings pause for about 40 s.'));
 $('#heat').addEventListener('click', () =>

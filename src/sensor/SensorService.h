@@ -64,6 +64,8 @@ class SensorService {
   void recalibrateCo2(uint16_t referencePpm);
   // Erases every CO2 calibration, forced or automatic.
   void resetCo2Calibration();
+  // Most error flags stay set until cleared, even once the error is gone.
+  void clearErrors();
 
  private:
   enum class CommandType : uint8_t {
@@ -72,6 +74,7 @@ class SensorService {
     HeatHumiditySensor,
     RecalibrateCo2,
     ResetCo2Calibration,
+    ClearErrors,
   };
   struct Command {
     CommandType type;

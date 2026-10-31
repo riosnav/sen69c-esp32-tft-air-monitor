@@ -10,7 +10,7 @@
 //   GET  /api/history   ?metric=co2&range=hour|day
 //   GET  /api/settings  POST changes them *
 //   POST /api/action    clean fan, heat the humidity sensor, calibrate CO2, reset
-//                       the CO2 calibration, restart *
+//                       the CO2 calibration, clear sensor errors, restart *
 //   GET  /api/wifi      POST: scan, connect, save, forget, finish *
 //   GET  /api/mqtt      Home Assistant broker settings and state; POST changes them *
 //   GET  /api/auth      204 if the request carries the web password

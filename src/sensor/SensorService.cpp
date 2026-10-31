@@ -109,6 +109,8 @@ void SensorService::recalibrateCo2(uint16_t referencePpm) {
 
 void SensorService::resetCo2Calibration() { send({CommandType::ResetCo2Calibration, {}, 0}); }
 
+void SensorService::clearErrors() { send({CommandType::ClearErrors, {}, 0}); }
+
 void SensorService::send(const Command& cmd) {
   if (xQueueSend(queue_, &cmd, 0) != pdTRUE) setResult("Sensor busy, try again");
 }
@@ -325,6 +327,13 @@ void SensorService::handle(const Command& cmd) {
                                                          : "CO2 reset failed");
       restarted = startMeasurement(false);  // sets self-calibration again
       break;
+    case CommandType::ClearErrors: {
+      SEN69CDeviceStatus status{};
+      const bool cleared = sen_.readAndClearDeviceStatus(status) == 0;
+      readDeviceStatus();  // shows what's still wrong now
+      setResult(cleared ? "Sensor errors cleared" : "Could not clear the errors");
+      return;
+    }
   }
   // If the sensor didn't come back, make run() look for it again.
   if (!restarted) consecutiveErrors_ = kMaxConsecutiveErrors;

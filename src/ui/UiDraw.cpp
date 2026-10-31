@@ -551,9 +551,10 @@ void Ui::drawDevice(uint32_t nowMs) {
     line(String(s.product) + "  firmware " + s.firmwareMajor + "." + s.firmwareMinor, theme::kText);
     line(String("S/N ") + s.serial, theme::kMuted);
   }
+  const bool error = s.state != SensorState::Busy && s.deviceStatus != 0;
   if (s.state == SensorState::Busy) {
     line(s.activity, theme::kWarning);
-  } else if (s.deviceStatus != 0) {
+  } else if (error) {
     line(statusText(s.deviceStatus), theme::kAlarm);
   } else if (s.lastError != 0) {
     line("I2C error " + String(s.lastError), theme::kAlarm);
@@ -574,6 +575,11 @@ void Ui::drawDevice(uint32_t nowMs) {
     }
   }
   line("Uptime " + duration(nowMs) + ", v" FW_VERSION, theme::kMuted);
+  // Most error flags stay set once the error is gone, until cleared.
+  if (error && y <= 123) {
+    frame_.setFont(kSmall);
+    drawRich(frame_, "D1: clear the error", kLeft, 129, theme::kMuted);
+  }
 }
 
 void Ui::drawNetwork() {

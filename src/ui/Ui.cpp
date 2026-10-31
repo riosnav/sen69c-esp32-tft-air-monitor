@@ -143,6 +143,8 @@ void Ui::onPageEvent(size_t button, aq::ButtonEvent event) {
     trendMetric_ = (trendMetric_ + 1) % kTrendMetrics.size();
   } else if (page_ == Page::Network) {
     onNetworkAction();
+  } else if (page_ == Page::Device && snapshot_.deviceStatus != 0) {
+    sensor_->clearErrors();
   }
 }
 

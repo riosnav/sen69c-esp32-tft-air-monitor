@@ -139,7 +139,9 @@ Small symbols next to each button show what it does on the current screen.
 Pages: *Air quality* (overview), *Particles*, *Gases*, *Comfort*, the trend of the last hour, the trend of the
 last 24 hours, *Wi-Fi* and *Device*.
 D1 on a trend page shows the next value. On the Wi-Fi page it starts Wi-Fi setup (or turns Wi-Fi back on), or,
-once connected, shows a QR code that opens the web page on a phone.
+once connected, shows a QR code that opens the web page on a phone. On the *Device* page it clears a sensor error:
+the sensor keeps reporting most errors until they are cleared, even once they are gone, so one that comes back is
+still there.
 The screen dims after 2 minutes without use (changeable); when it is dimmed, the first press only wakes it.
 
 ### Levels and alerts

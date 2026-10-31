@@ -546,6 +546,8 @@ esp_err_t postAction(httpd_req_t* req) {
     ctx.sensor->heatHumiditySensor();
   } else if (strcmp(action, "resetCo2Calibration") == 0) {
     ctx.sensor->resetCo2Calibration();
+  } else if (strcmp(action, "clearErrors") == 0) {
+    ctx.sensor->clearErrors();
   } else if (strcmp(action, "calibrateCo2") == 0) {
     const cJSON* ppm = field(json.get(), "ppm");
     if (!cJSON_IsNumber(ppm) || ppm->valuedouble < 350 || ppm->valuedouble > 2000) {
