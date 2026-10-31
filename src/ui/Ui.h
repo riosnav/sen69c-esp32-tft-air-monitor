@@ -57,6 +57,7 @@ class Ui {
     Altitude,
     Co2SelfCalibration,
     CalibrateCo2,
+    ResetCo2,
     CleanFan,
     HeatHumiditySensor,
     Restart,

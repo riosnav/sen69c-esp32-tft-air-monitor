@@ -219,6 +219,7 @@ void Ui::select(Item item) {
     case Item::CleanFan:
     case Item::HeatHumiditySensor:
     case Item::CalibrateCo2:
+    case Item::ResetCo2:
     case Item::ForgetWifi:
     case Item::Restart:
     case Item::FactoryReset:
@@ -283,6 +284,9 @@ void Ui::execute(Item item) {
       break;
     case Item::CalibrateCo2:
       sensor_->recalibrateCo2(kOutdoorCo2Ppm);
+      break;
+    case Item::ResetCo2:
+      sensor_->resetCo2Calibration();
       break;
     case Item::ForgetWifi:
       wifi_->forgetAll();

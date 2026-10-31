@@ -107,6 +107,8 @@ void SensorService::recalibrateCo2(uint16_t referencePpm) {
   send({CommandType::RecalibrateCo2, {}, referencePpm});
 }
 
+void SensorService::resetCo2Calibration() { send({CommandType::ResetCo2Calibration, {}, 0}); }
+
 void SensorService::send(const Command& cmd) {
   if (xQueueSend(queue_, &cmd, 0) != pdTRUE) setResult("Sensor busy, try again");
 }
@@ -316,6 +318,13 @@ void SensorService::handle(const Command& cmd) {
       restarted = startMeasurement(false);
       break;
     }
+    case CommandType::ResetCo2Calibration:
+      setState(SensorState::Busy, "Resetting CO2");
+      stopMeasurement();
+      setResult(sen_.performCo2SensorFactoryReset() == 0 ? "CO2 calibration reset"
+                                                         : "CO2 reset failed");
+      restarted = startMeasurement(false);  // sets self-calibration again
+      break;
   }
   // If the sensor didn't come back, make run() look for it again.
   if (!restarted) consecutiveErrors_ = kMaxConsecutiveErrors;

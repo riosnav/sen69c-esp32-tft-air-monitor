@@ -62,6 +62,8 @@ class SensorService {
   // gives after a long time in very humid air.
   void heatHumiditySensor();
   void recalibrateCo2(uint16_t referencePpm);
+  // Erases every CO2 calibration, forced or automatic.
+  void resetCo2Calibration();
 
  private:
   enum class CommandType : uint8_t {
@@ -69,6 +71,7 @@ class SensorService {
     CleanFan,
     HeatHumiditySensor,
     RecalibrateCo2,
+    ResetCo2Calibration,
   };
   struct Command {
     CommandType type;

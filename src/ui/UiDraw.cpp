@@ -38,7 +38,7 @@ constexpr const char* kItemLabels[] = {
     "Brightness",   "Dim after",    "Units",          "Status LED",
     "Wi-Fi",        "Set up Wi-Fi", "Forget Wi-Fi",
     "Temp. offset", "Altitude",     "CO_2 self-calibration", "Calibrate CO_2",
-    "Clean fan", "Heat humidity sensor",
+    "Reset CO_2 calibration", "Clean fan", "Heat humidity sensor",
     "Restart",      "Factory reset", "Close",
 };
 
@@ -852,6 +852,11 @@ void Ui::drawConfirm() {
       title = "Calibrate CO_2?";
       line1 = "Sets 420 ppm. Only outdoors,";
       line2 = "after 3 min in fresh air.";
+      break;
+    case Item::ResetCo2:
+      title = "Reset CO_2?";
+      line1 = "Erases every CO_2 calibration;";
+      line2 = "self-calibration starts over.";
       break;
     case Item::ForgetWifi:
       title = "Forget Wi-Fi?";

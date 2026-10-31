@@ -181,6 +181,10 @@ footer { color: var(--muted); font-size: 12px; margin-top: 30px; }
         <button type="button" class="plain" id="calibrate">Calibrate</button></span>
     </div>
     <div class="task">
+      <div><strong>Reset the CO&#8322; calibration</strong><p class="hint">Erases every CO&#8322; calibration, e.g. to undo one made with the wrong reference. Self-calibration starts over.</p></div>
+      <button type="button" class="plain" id="reset-co2">Reset</button>
+    </div>
+    <div class="task">
       <div><strong>Restart</strong></div>
       <button type="button" class="plain" id="restart">Restart</button>
     </div>
@@ -912,6 +916,11 @@ $('#clean-fan').addEventListener('click', () =>
   action({ action: 'cleanFan' }, 'Fan cleaning started; readings pause for about 40 s.'));
 $('#heat').addEventListener('click', () =>
   action({ action: 'heatHumiditySensor' }, 'Heating started; readings pause for about a minute.'));
+$('#reset-co2').addEventListener('click', () => {
+  if (confirm('Erase every CO₂ calibration? Self-calibration starts over, so the CO₂ reading may be off until the monitor has seen fresh air for a while.')) {
+    action({ action: 'resetCo2Calibration' }, 'Reset started; the monitor shows the result.');
+  }
+});
 $('#calibrate').addEventListener('click', () => {
   const ppm = Number($('#ppm').value);
   if (confirm(`Calibrate the CO₂ sensor to ${ppm} ppm now? Only do this after at least 3 minutes in fresh outdoor air.`)) {
