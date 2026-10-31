@@ -18,6 +18,8 @@
 //
 // * needs the web password (HTTP basic auth, any user name), except through
 //   the setup hotspot: joining it already took the password on the screen.
+//   After 3 wrong passwords in a row, passwords are refused (429) for a minute,
+//   doubling with each further miss, up to 15 minutes.
 #pragma once
 
 #include <AirQuality.h>
@@ -48,5 +50,7 @@ struct Context {
 // Starts the server; call once the network stack is up.
 bool begin(const Context& context);
 bool started();
+// Wrong web passwords since start.
+uint32_t failedLogins();
 
 }  // namespace web

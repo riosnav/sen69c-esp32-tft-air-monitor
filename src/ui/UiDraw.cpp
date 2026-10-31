@@ -12,6 +12,7 @@
 #include "Text.h"
 #include "Theme.h"
 #include "Ui.h"
+#include "net/Web.h"
 
 using aq::Level;
 using aq::Metric;
@@ -575,6 +576,10 @@ void Ui::drawDevice(uint32_t nowMs) {
     }
   }
   line("Uptime " + duration(nowMs) + ", v" FW_VERSION, theme::kMuted);
+  if (const uint32_t failures = web::failedLogins()) {
+    line(String(failures) + (failures == 1 ? " wrong web password" : " wrong web passwords"),
+         theme::kWarning);
+  }
   // Most error flags stay set once the error is gone, until cleared.
   if (error && y <= 123) {
     frame_.setFont(kSmall);

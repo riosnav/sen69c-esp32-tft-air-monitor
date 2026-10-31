@@ -237,6 +237,10 @@ it once per browser tab). A random one is created on first start; it can be chan
 and a factory reset creates a new one. The connection is plain HTTP, as is usual for devices on a home network, so
 don't reuse a valuable password.
 
+Against guessing: after 3 wrong passwords in a row, the monitor refuses every password for a minute, then twice as
+long after each further miss, but never more than 15 minutes, so someone trying can't lock you out for longer. The
+*Device* page on the monitor and on the web page count the wrong passwords.
+
 ![The web page: a card per value with its accuracy, and a trend chart of the last hour with the sensor's
 tolerance as a shaded band](docs/web-page.png)
 
@@ -304,6 +308,7 @@ first, or can't rejoin within 5 minutes, the monitor goes back to the previous f
 | The `.local` address doesn't open | Use the IP address shown on the Wi-Fi page, or its QR code (D1). |
 | Home Assistant doesn't connect | The Wi-Fi page shows the reason, e.g. "HA: Wrong user name or password" or "HA: Can't reach the broker"; check the settings on the web page. |
 | Lost the web password | It is shown on the monitor's Wi-Fi page. |
+| "Too many wrong passwords" | Wait as long as the message says (15 minutes at most), then enter the password from the monitor's Wi-Fi page. |
 | Can't reach the monitor after giving it a fixed address | Its Wi-Fi page shows the address it uses. To go back to DHCP, choose *Forget Wi-Fi* in its settings and set up Wi-Fi again. |
 | Start over | *Factory reset* in the settings. |
 
@@ -327,8 +332,9 @@ sensor is on I²C address `0x6B`.
 ### Running the tests
 
 The hardware-independent logic (`lib/aqcore`: limits, history, buttons, comfort maths; `lib/netcore`: choosing
-which Wi-Fi network to join, checking fixed addresses) has Unity tests that run on the board. With native USB the
-serial port disappears while the board restarts, so upload and test in two steps:
+which Wi-Fi network to join, the delays after wrong web passwords, checking fixed addresses) has Unity tests that
+run on the board. With native USB the serial port disappears while the board restarts, so upload and test in two
+steps:
 
 ```sh
 pio test --without-testing      # build and flash the test firmware

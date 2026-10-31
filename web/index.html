@@ -389,6 +389,10 @@ async function authorize() {
   for (;;) {
     const response = await fetch('/api/auth', { headers: apiHeaders() });
     if (response.ok) return;
+    if (response.status === 429) {
+      rememberPassword(null);  // so a wrong one isn't sent again by itself
+      throw new Error(await response.text());
+    }
     if (response.status !== 401) throw new Error(`${response.status} ${response.statusText}`);
     const entered = await askPassword(wrong);
     if (entered === null) throw new Error('Not sent: this needs the web password.');
@@ -580,6 +584,10 @@ function renderState() {
   $('#mqtt-status').textContent = `Status: ${mqttText(s.mqtt)}.`;
   rows.push(['Address', `${s.host}.local`]);
   rows.push(['Firmware', `v${s.version}, running for ${duration(s.uptime)}`]);
+  if (s.login && s.login.failed) {
+    const locked = s.login.wait ? `; passwords refused for ${duration(s.login.wait)}` : '';
+    rows.push(['Web password', `${s.login.failed} wrong since the monitor started${locked}`]);
+  }
   $('#device').replaceChildren(...rows.flatMap(([term, value]) => {
     const dt = document.createElement('dt');
     const dd = document.createElement('dd');

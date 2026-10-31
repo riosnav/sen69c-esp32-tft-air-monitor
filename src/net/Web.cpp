@@ -4,12 +4,14 @@
 
 #include <Arduino.h>
 #include <Ipv4.h>
+#include <LoginGuard.h>
 #include <cJSON.h>
 #include <esp_http_server.h>
 #include <lwip/sockets.h>
 #include <mbedtls/base64.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstring>
 #include <iterator>
@@ -36,6 +38,10 @@ constexpr int kRecvRetries = 5;
 
 Context ctx;
 httpd_handle_t server = nullptr;
+// Handlers all run in the server's task, so the guard needs no lock; the
+// count is copied out for the UI.
+net::LoginGuard guard;
+std::atomic<uint32_t> loginFailures{0};
 
 // ---------------------------------------------------------------- helpers
 
@@ -234,6 +240,21 @@ bool sameSecret(const char* given, const char* expected) {
   return diff == 0;
 }
 
+// The password from a basic auth header ("user:password"; the user name
+// doesn't matter), or nullptr if the header is malformed.
+const char* passwordOf(const char* header, unsigned char (&decoded)[128]) {
+  if (strncmp(header, "Basic ", 6) != 0) return nullptr;
+  size_t length = 0;
+  const char* encoded = header + 6;
+  if (mbedtls_base64_decode(decoded, sizeof decoded - 1, &length,
+                            reinterpret_cast<const unsigned char*>(encoded), strlen(encoded)) != 0) {
+    return nullptr;
+  }
+  decoded[length] = '\0';
+  const char* colon = strchr(reinterpret_cast<const char*>(decoded), ':');
+  return colon != nullptr ? colon + 1 : nullptr;
+}
+
 bool authorized(httpd_req_t* req) {
   if (viaHotspot(req)) return true;  // joining it took the password on the screen
   char password[sizeof Settings::webPassword];
@@ -243,23 +264,41 @@ bool authorized(httpd_req_t* req) {
   }
   if (password[0] == '\0') return true;
 
+  // While the guard says wait, nothing is checked (refuse() says why).
+  const uint32_t now = millis();
+  if (guard.waitMs(now) > 0) return false;
   char header[160];
-  if (httpd_req_get_hdr_value_str(req, "Authorization", header, sizeof header) != ESP_OK) return false;
-  if (strncmp(header, "Basic ", 6) != 0) return false;
-  unsigned char decoded[128];
-  size_t length = 0;
-  const char* encoded = header + 6;
-  if (mbedtls_base64_decode(decoded, sizeof decoded - 1, &length,
-                            reinterpret_cast<const unsigned char*>(encoded), strlen(encoded)) != 0) {
-    return false;
+  if (httpd_req_get_hdr_value_str(req, "Authorization", header, sizeof header) != ESP_OK) {
+    return false;  // no password given: not a guess
   }
-  decoded[length] = '\0';
-  // "user:password"; the user name doesn't matter.
-  const char* colon = strchr(reinterpret_cast<const char*>(decoded), ':');
-  return colon != nullptr && sameSecret(colon + 1, password);
+  unsigned char decoded[128];
+  const char* given = passwordOf(header, decoded);
+  if (given != nullptr && sameSecret(given, password)) {
+    guard.succeeded();
+    return true;
+  }
+  guard.failed(now);
+  loginFailures = guard.failures();
+  Serial.printf("Web: wrong password (%u since start)\n", static_cast<unsigned>(guard.failures()));
+  return false;
 }
 
-esp_err_t askForPassword(httpd_req_t* req) {
+// Answers a request authorized() turned down.
+esp_err_t refuse(httpd_req_t* req) {
+  const uint32_t waitS = (guard.waitMs(millis()) + 999) / 1000;
+  if (waitS > 0) {
+    char retryAfter[12];
+    snprintf(retryAfter, sizeof retryAfter, "%u", static_cast<unsigned>(waitS));
+    httpd_resp_set_hdr(req, "Retry-After", retryAfter);
+    char text[80];
+    if (waitS < 60) {
+      snprintf(text, sizeof text, "Too many wrong passwords. Try again in %u s.", static_cast<unsigned>(waitS));
+    } else {
+      snprintf(text, sizeof text, "Too many wrong passwords. Try again in %u min.",
+               static_cast<unsigned>((waitS + 59) / 60));
+    }
+    return sendText(req, "429 Too Many Requests", text);
+  }
   // The web page asks for the password itself (the browser's prompt would also
   // ask for a user name) and marks its requests; anything else, such as curl
   // or a browser opening the API directly, gets the usual Basic prompt.
@@ -355,6 +394,10 @@ esp_err_t getState(httpd_req_t* req) {
     cJSON_AddStringToObject(wifi, "ssid", ctx.wifi->ssid());
     cJSON_AddNumberToObject(wifi, "rssi", ctx.wifi->rssi());
     addMqttState(cJSON_AddObjectToObject(r, "mqtt"), *ctx.mqtt);
+
+    cJSON* login = cJSON_AddObjectToObject(r, "login");
+    cJSON_AddNumberToObject(login, "failed", guard.failures());
+    cJSON_AddNumberToObject(login, "wait", (guard.waitMs(now) + 999) / 1000);
   }
   return sendJson(req, r);
 }
@@ -517,7 +560,7 @@ const char* parseSettings(const cJSON* json, Settings& s) {
 }
 
 esp_err_t postSettings(httpd_req_t* req) {
-  if (!authorized(req)) return askForPassword(req);
+  if (!authorized(req)) return refuse(req);
   const Json json = readJson(req);
   if (!json) return badRequest(req, "Expected a JSON object");
   // Replies go out after the lock is released: a slow client mustn't stall the loop.
@@ -537,7 +580,7 @@ esp_err_t postSettings(httpd_req_t* req) {
 }
 
 esp_err_t postAction(httpd_req_t* req) {
-  if (!authorized(req)) return askForPassword(req);
+  if (!authorized(req)) return refuse(req);
   const Json json = readJson(req);
   const char* action = json ? stringField(json.get(), "action") : nullptr;
   if (action == nullptr) return badRequest(req, "Expected {\"action\": ...}");
@@ -701,7 +744,7 @@ const char* wifiAction(const char* action, const cJSON* json) {
 }
 
 esp_err_t postWifi(httpd_req_t* req) {
-  if (!authorized(req)) return askForPassword(req);
+  if (!authorized(req)) return refuse(req);
   const Json json = readJson(req);
   const char* action = json ? stringField(json.get(), "action") : nullptr;
   if (action == nullptr) return badRequest(req, "Expected {\"action\": ...}");
@@ -773,7 +816,7 @@ const char* parseMqtt(const cJSON* json, Settings& s) {
 }
 
 esp_err_t postMqtt(httpd_req_t* req) {
-  if (!authorized(req)) return askForPassword(req);
+  if (!authorized(req)) return refuse(req);
   const Json json = readJson(req);
   if (!json) return badRequest(req, "Expected a JSON object");
   Json reply(cJSON_CreateObject());
@@ -794,11 +837,11 @@ esp_err_t postMqtt(httpd_req_t* req) {
 // ---------------------------------------------------------------- firmware
 
 esp_err_t getAuth(httpd_req_t* req) {
-  return authorized(req) ? sendOk(req) : askForPassword(req);
+  return authorized(req) ? sendOk(req) : refuse(req);
 }
 
 esp_err_t postOta(httpd_req_t* req) {
-  if (!authorized(req)) return askForPassword(req);
+  if (!authorized(req)) return refuse(req);
   if (const char* error = ctx.ota->start(req->content_len)) return badRequest(req, error);
   std::unique_ptr<uint8_t[]> buffer(new (std::nothrow) uint8_t[kOtaChunkBytes]);
   if (!buffer) {
@@ -867,5 +910,7 @@ bool begin(const Context& context) {
 }
 
 bool started() { return server != nullptr; }
+
+uint32_t failedLogins() { return loginFailures; }
 
 }  // namespace web

@@ -8,6 +8,7 @@
 #include <Comfort.h>
 #include <History.h>
 #include <Ipv4.h>
+#include <LoginGuard.h>
 #include <WifiChoice.h>
 #include <unity.h>
 
@@ -176,6 +177,38 @@ static void test_wifi_choice_ties_keep_saved_order() {
   TEST_ASSERT_EQUAL(0, net::chooseNetworks(saved, 2, scan, 0, out));
 }
 
+static void test_login_guard_waits_double_up_to_a_limit() {
+  net::LoginGuard g;
+  uint32_t t = 1000;
+  g.failed(t);
+  g.failed(t);
+  TEST_ASSERT_EQUAL(0, g.waitMs(t));  // two misses are free
+  g.failed(t);
+  TEST_ASSERT_EQUAL(60000, g.waitMs(t));
+  TEST_ASSERT_EQUAL(1000, g.waitMs(t + 59000));
+  TEST_ASSERT_EQUAL(0, g.waitMs(t += 60000));
+  g.failed(t);
+  TEST_ASSERT_EQUAL(120000, g.waitMs(t));
+  for (int i = 0; i < 10; ++i) g.failed(t += 15 * 60000);
+  TEST_ASSERT_EQUAL(net::LoginGuard::kMaxWaitMs, g.waitMs(t));
+  TEST_ASSERT_EQUAL(14, g.failures());
+  // The right password resets the wait but not the count.
+  g.succeeded();
+  TEST_ASSERT_EQUAL(0, g.waitMs(t));
+  g.failed(t);
+  g.failed(t);
+  TEST_ASSERT_EQUAL(0, g.waitMs(t));
+  TEST_ASSERT_EQUAL(16, g.failures());
+}
+
+static void test_login_guard_survives_millis_wrapping() {
+  net::LoginGuard g;
+  const uint32_t t = 0xFFFFFFFFu - 30000;
+  for (int i = 0; i < 3; ++i) g.failed(t);
+  TEST_ASSERT_EQUAL(30000, g.waitMs(t + 30000));  // past the wrap
+  TEST_ASSERT_EQUAL(0, g.waitMs(t + 60000));
+}
+
 static void test_ipv4_parse_and_format() {
   uint32_t a = 0;
   TEST_ASSERT_TRUE(net::parseIpv4("192.168.1.20", a));
@@ -223,6 +256,8 @@ static int runTests() {
   RUN_TEST(test_comfort_values);
   RUN_TEST(test_wifi_choice_strongest_first_then_hidden);
   RUN_TEST(test_wifi_choice_ties_keep_saved_order);
+  RUN_TEST(test_login_guard_waits_double_up_to_a_limit);
+  RUN_TEST(test_login_guard_survives_millis_wrapping);
   RUN_TEST(test_ipv4_parse_and_format);
   RUN_TEST(test_fixed_address_checks);
   return UNITY_END();
