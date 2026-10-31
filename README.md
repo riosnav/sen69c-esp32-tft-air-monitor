@@ -345,9 +345,9 @@ sensor is on I²C address `0x6B`.
 ### Running the tests
 
 The hardware-independent logic (`lib/aqcore`: limits, history, buttons, comfort maths; `lib/netcore`: choosing
-which Wi-Fi network to join, the delays after wrong web passwords, checking fixed addresses) has Unity tests that
-run on the board. With native USB the serial port disappears while the board restarts, so upload and test in two
-steps:
+which Wi-Fi network to join, the delays after wrong web passwords, checking fixed addresses; `lib/powercore`:
+battery warnings and when to switch off) has Unity tests that run on the board. With native USB the serial port
+disappears while the board restarts, so upload and test in two steps:
 
 ```sh
 pio test --without-testing      # build and flash the test firmware
