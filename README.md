@@ -43,7 +43,7 @@ humidity, all in green](docs/screen.png)
 | 1 | [STEMMA QT / Qwiic cable, 100 mm](https://www.adafruit.com/product/4210), product **4210** | Breakout → Feather. STEMMA QT is Adafruit's 4-pin plug-in connector, the same as SparkFun's Qwiic; any length works. |
 | 1 | USB-C cable that carries **data** | To program the board: USB-A to C or C to C, to fit your computer. Some cables only charge; they won't work for that. |
 | 1 | USB charger (5 V) | To power the monitor afterwards; a phone charger is fine. |
-| opt. | LiPo battery (3.7 V, 250 mAh or more) with a JST-PH 2-pin plug | Only as a backup for power cuts or moving it around; the monitor is meant to run from USB. Adafruit's own LiPo batteries fit; some from other sellers are wired the other way round, which can destroy the board. |
+| opt. | LiPo battery (3.7 V, 250 mAh or more) with a JST-PH 2-pin plug | Only as a backup for power cuts or moving it around; the monitor is meant to run from USB. Adafruit's own LiPo batteries fit, and have the protection circuit a battery needs against running completely flat; some from other sellers lack it, or are wired the other way round, which can destroy the board. |
 
 No soldering or tools are needed: the Feather comes with loose header pins, which you don't use. This repository
 doesn't include an enclosure.
@@ -210,6 +210,9 @@ default. With it ticked:
 - The *Device* page shows the battery's charge, and whether it's charging or running the monitor. Home Assistant
   gets a *Battery* sensor.
 - While the monitor runs on battery, a pop-up warns at 20 % and again at 10 %, and the web page shows a banner.
+- At about 3.5 V the monitor switches itself off: below that, the board can't give the sensor the voltage it needs,
+  and the readings would be wrong. Once USB power is back it starts again by itself within 5 minutes; D1 or D2
+  starts it at once. Expect a battery to last hours, not days.
 
 ## Wi-Fi and the web page
 

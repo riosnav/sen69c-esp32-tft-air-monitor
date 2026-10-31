@@ -9,6 +9,8 @@
 #include <cstring>
 
 #include "Device.h"
+#include "Power.h"
+#include "Screens.h"
 #include "Text.h"
 #include "Theme.h"
 #include "Ui.h"
@@ -161,6 +163,18 @@ Verdict comfortVerdict(const aq::AirQuality& aq, const aq::Measurement& m) {
 
 }  // namespace
 
+void drawBatteryEmpty(LGFX_Sprite& frame) {
+  frame.fillScreen(theme::kBackground);
+  frame.setFont(kMedium);
+  drawRich(frame, "Battery empty", kLeft, 30, theme::kAlarm);
+  frame.setFont(kBody);
+  drawRich(frame, "Switched off to protect it.", kLeft, 54, theme::kText);
+  drawRich(frame, "With USB power connected,", kLeft, 78, theme::kMuted);
+  const String back = "it starts again within " + String(power::kCheckEveryMinutes) + " min,";
+  drawRich(frame, back.c_str(), kLeft, 94, theme::kMuted);
+  drawRich(frame, "or at once with D1 or D2.", kLeft, 110, theme::kMuted);
+}
+
 const std::array<Metric, 10> Ui::kTrendMetrics = {
     Metric::Co2,  Metric::Pm1, Metric::Pm25, Metric::Pm4,         Metric::Pm10,
     Metric::Hcho, Metric::Voc, Metric::Nox,  Metric::Temperature, Metric::Humidity,
@@ -172,6 +186,11 @@ void Ui::draw(uint32_t nowMs) {
 
   frame_.fillScreen(theme::kBackground);
   // These take over the whole screen.
+  if (batteryEmpty_) {
+    drawBatteryEmpty(frame_);
+    frame_.pushSprite(0, 0);
+    return;
+  }
   const OtaState ota = ota_->state();
   if (ota == OtaState::Confirming) {
     drawUpdatePrompt(nowMs);

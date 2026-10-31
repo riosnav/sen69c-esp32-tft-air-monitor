@@ -586,7 +586,8 @@ function renderState() {
   const low = s.battery ? s.battery.warning : 0;
   $('#battery-low').hidden = !low;
   if (low) {
-    $('#battery-low').textContent = `The battery is ${low > 1 ? 'very ' : ''}low (${s.battery.percent} %). Connect USB power.`;
+    $('#battery-low').textContent = `The battery is ${low > 1 ? 'very ' : ''}low (${s.battery.percent} %). Connect USB power; ` +
+      'at about 3.5 V the monitor switches off to protect it, and starts again once USB power is back.';
   }
   rows.push(['Wi-Fi', s.wifi.ssid ? `${s.wifi.ssid}, ${s.wifi.rssi} dBm` : 'not connected']);
   if (s.mqtt.state !== 'off') rows.push(['Home Assistant', mqttText(s.mqtt)]);

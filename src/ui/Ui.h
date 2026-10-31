@@ -33,6 +33,8 @@ class Ui {
   void update(const SensorSnapshot& snapshot, uint32_t nowMs);
   // The settings were changed elsewhere (web page): apply and save them.
   void settingsChanged() { settingsChanged_ = true; }
+  // Says the monitor is switching off for an empty battery, at once and for good.
+  void showBatteryEmpty();
 
  private:
   enum class Mode : uint8_t { Pages, Menu, Edit, Confirm, Link };
@@ -160,6 +162,7 @@ class Ui {
   // alert, and the last one acknowledged.
   uint8_t batteryAlert_ = 0;
   uint8_t batteryAcknowledged_ = 0;
+  bool batteryEmpty_ = false;
 
   uint32_t lastInputMs_ = 0;
   bool dimmed_ = false;

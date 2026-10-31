@@ -13,6 +13,7 @@
 #include <new>
 
 #include "AppLock.h"
+#include "Power.h"
 #include "Settings.h"
 #include "System.h"
 #include "net/MqttService.h"
@@ -25,6 +26,8 @@
 namespace {
 
 constexpr uint32_t kLogIntervalMs = 10000;
+// How long the screen says why, before switching off.
+constexpr uint32_t kEmptyMessageMs = 5000;
 
 // Owned by the main loop; the web server reaches them under AppLock.
 Settings userSettings;
@@ -94,6 +97,7 @@ void logMeasurement(const SensorSnapshot& s) {
 
 void setup() {
   Serial.begin(115200);
+  power::begin();  // after switching off for an empty battery, may sleep again
   // Give a serial monitor a moment to attach, but never block standalone use.
   for (uint32_t start = millis(); !Serial && millis() - start < 2000;) delay(10);
   Serial.printf("\nSEN69C Air Monitor %s\n", FW_VERSION);
@@ -115,6 +119,7 @@ void loop() {
   static uint32_t lastSequence = 0;
   static uint32_t lastLogMs = 0;
   const uint32_t now = millis();
+  bool batteryEmpty = false;
   {
     AppLock lock;
     sensor.snapshot(latest);
@@ -144,6 +149,17 @@ void loop() {
       lastLogMs = now;
       logMeasurement(latest);
     }
+    if (battery.empty()) {
+      batteryEmpty = true;
+      Serial.printf("Battery empty (%.2f V): switching off until USB power is back\n",
+                    latest.batteryVolts);
+      ui.showBatteryEmpty();
+      mqtt.shutDown();  // so Home Assistant shows it as unavailable at once
+    }
+  }
+  if (batteryEmpty) {
+    delay(kEmptyMessageMs);
+    power::shutDownForBattery();
   }
   sys::loop(now);
   delay(5);

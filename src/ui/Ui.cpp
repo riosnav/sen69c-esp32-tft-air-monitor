@@ -92,6 +92,13 @@ void Ui::update(const SensorSnapshot& snapshot, uint32_t nowMs) {
   }
 }
 
+void Ui::showBatteryEmpty() {
+  batteryEmpty_ = true;
+  dimmed_ = false;
+  tft_.setBrightness(backlight(settings_->brightness));
+  draw(millis());
+}
+
 void Ui::handleButton(size_t button, aq::ButtonEvent event, uint32_t nowMs) {
   using aq::ButtonEvent;
   if (event == ButtonEvent::None) return;

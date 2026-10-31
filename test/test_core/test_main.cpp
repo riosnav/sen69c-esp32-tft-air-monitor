@@ -272,6 +272,33 @@ static void test_battery_warnings_with_hysteresis() {
   TEST_ASSERT_EQUAL(0, w.warning());
 }
 
+static void test_battery_empty_after_a_minute_low() {
+  power::BatteryWatch w;
+  uint32_t t = 1000;
+  w.update(3.49f, 4, -8, t);
+  TEST_ASSERT_FALSE_MESSAGE(w.empty(), "just went low");
+  w.update(3.52f, 4, -8, t += 30000);  // a dip, not yet empty
+  w.update(3.49f, 4, -8, t += 1000);
+  w.update(3.48f, 3, -8, t += 59000);
+  TEST_ASSERT_FALSE_MESSAGE(w.empty(), "59 s low");
+  w.update(3.48f, 3, -8, t += 1000);
+  TEST_ASSERT_TRUE(w.empty());
+  w.update(3.48f, 3, 20, t += 1000);  // USB power came back
+  TEST_ASSERT_FALSE_MESSAGE(w.empty(), "charging");
+  power::BatteryWatch idle;
+  idle.update(3.3f, 0, 0, 0);
+  idle.update(3.3f, 0, 0, 120000);
+  TEST_ASSERT_FALSE_MESSAGE(idle.empty(), "not discharging");
+}
+
+static void test_power_is_back() {
+  TEST_ASSERT_TRUE(power::powerIsBack(3.55f, 9.8f));    // charging
+  TEST_ASSERT_TRUE(power::powerIsBack(3.85f, 0));        // well charged
+  TEST_ASSERT_FALSE_MESSAGE(power::powerIsBack(3.62f, 0), "resting after the shutdown");
+  TEST_ASSERT_FALSE_MESSAGE(power::powerIsBack(3.5f, -0.2f), "asleep, on battery");
+  TEST_ASSERT_FALSE_MESSAGE(power::powerIsBack(NAN, NAN), "no reading");
+}
+
 static int runTests() {
   UNITY_BEGIN();
   RUN_TEST(test_level_unknown_for_nan);
@@ -291,6 +318,8 @@ static int runTests() {
   RUN_TEST(test_fixed_address_checks);
   RUN_TEST(test_battery_state_from_charge_rate);
   RUN_TEST(test_battery_warnings_with_hysteresis);
+  RUN_TEST(test_battery_empty_after_a_minute_low);
+  RUN_TEST(test_power_is_back);
   return UNITY_END();
 }
 

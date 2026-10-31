@@ -42,6 +42,8 @@ class MqttService {
   MqttState state() const;
   // Why connecting failed; "" otherwise.
   const char* error() const;
+  // Says "offline" and disconnects, before the monitor switches off.
+  void shutDown();
 
  private:
   enum class Error : uint8_t { None, Unreachable, Refused, BadLogin };

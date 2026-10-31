@@ -151,6 +151,10 @@ const char* MqttService::error() const {
   }
 }
 
+void MqttService::shutDown() {
+  if (client_ != nullptr) stop();
+}
+
 bool MqttService::wanted() const {
   return settings_->mqttEnabled && settings_->mqttHost[0] != '\0';
 }

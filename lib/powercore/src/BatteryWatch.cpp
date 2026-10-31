@@ -25,6 +25,22 @@ void BatteryWatch::update(float volts, float percent, float ratePerHour, uint32_
     if (warning < warning_ && percent <= limit + kWarningHysteresis) warning = warning_;
   }
   warning_ = warning;
+
+  if (!discharging || std::isnan(volts) || volts > kEmptyVolts) {
+    low_ = false;
+    empty_ = false;
+    return;
+  }
+  if (!low_) {
+    low_ = true;
+    lowSinceMs_ = nowMs;
+  }
+  empty_ = nowMs - lowSinceMs_ >= kEmptyForMs;
+}
+
+bool powerIsBack(float volts, float ratePerHour) {
+  return stateOf(ratePerHour) == BatteryState::Charging ||
+         (!std::isnan(volts) && volts >= BatteryWatch::kBackVolts);
 }
 
 }  // namespace power
