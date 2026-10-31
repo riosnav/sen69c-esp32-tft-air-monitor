@@ -6,7 +6,9 @@
 //   Pages:   D0/D2 previous/next page, D1 page action, hold D1 for settings.
 //   Menu:    D0/D2 move, D1 select, hold D1 to close.
 //   Editing: D0/D2 change the value (hold to repeat), D1 done.
-// The Wi-Fi setup and firmware update screens take over the whole display.
+// The Wi-Fi setup and firmware update screens take over the whole display. An
+// update sent from the web page waits there for an answer: holding any button
+// for 5 s installs it, anything else refuses it.
 #pragma once
 
 #include <AirQuality.h>
@@ -24,7 +26,7 @@
 class Ui {
  public:
   void begin(SensorService& sensor, Settings& settings, const aq::AirQuality& airQuality,
-             const aq::MetricHistory& history, WifiService& wifi, const Ota& ota,
+             const aq::MetricHistory& history, WifiService& wifi, Ota& ota,
              const MqttService& mqtt);
   // Call often from loop(); `snapshot` is the sensor's latest state.
   void update(const SensorSnapshot& snapshot, uint32_t nowMs);
@@ -76,6 +78,8 @@ class Ui {
   void onMenuEvent(size_t button, aq::ButtonEvent event);
   void onEditEvent(size_t button, aq::ButtonEvent event);
   void onConfirmEvent(size_t button, aq::ButtonEvent event);
+  void onUpdatePromptEvent(size_t button, aq::ButtonEvent event, uint32_t nowMs);
+  void updatePrompt(uint32_t nowMs);
   void onNetworkAction();
   void select(Item item);
   void adjust(Item item, int direction);
@@ -106,6 +110,7 @@ class Ui {
   void drawSetup();
   void drawLink();
   void drawUpdate();
+  void drawUpdatePrompt(uint32_t nowMs);
   int drawQr(const char* text);
   void drawMenu();
   void drawConfirm();
@@ -128,7 +133,7 @@ class Ui {
   const aq::AirQuality* aq_ = nullptr;
   const aq::MetricHistory* history_ = nullptr;
   WifiService* wifi_ = nullptr;
-  const Ota* ota_ = nullptr;
+  Ota* ota_ = nullptr;
   const MqttService* mqtt_ = nullptr;
   SensorSnapshot snapshot_;
   bool settingsChanged_ = false;
@@ -152,6 +157,12 @@ class Ui {
   bool dimmed_ = false;
   uint32_t lastDrawMs_ = 0;
   bool dirty_ = true;
+
+  // Update prompt: the button held to say yes, and since when.
+  OtaState otaState_ = OtaState::Idle;
+  bool holding_ = false;
+  size_t holdButton_ = 0;
+  uint32_t holdStartMs_ = 0;
 
   char toast_[48] = "";
   uint32_t toastUntilMs_ = 0;

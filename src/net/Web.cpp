@@ -101,6 +101,25 @@ const char* setupStateId(SetupState state) {
   }
 }
 
+const char* otaStateId(OtaState state) {
+  switch (state) {
+    case OtaState::Receiving:
+      return "receiving";
+    case OtaState::Confirming:
+      return "confirming";
+    case OtaState::Accepted:
+      return "accepted";
+    case OtaState::Refused:
+      return "refused";
+    case OtaState::TimedOut:
+      return "timedOut";
+    case OtaState::Failed:
+      return "failed";
+    default:
+      return "idle";
+  }
+}
+
 const char* mqttStateId(MqttState state) {
   switch (state) {
     case MqttState::Waiting:
@@ -840,6 +859,13 @@ esp_err_t getAuth(httpd_req_t* req) {
   return authorized(req) ? sendOk(req) : refuse(req);
 }
 
+esp_err_t getOta(httpd_req_t* req) {
+  Json root(cJSON_CreateObject());
+  cJSON_AddStringToObject(root.get(), "state", otaStateId(ctx.ota->state()));
+  cJSON_AddNumberToObject(root.get(), "secondsLeft", ctx.ota->secondsLeft(millis()));
+  return sendJson(req, root.get());
+}
+
 esp_err_t postOta(httpd_req_t* req) {
   if (!authorized(req)) return refuse(req);
   if (const char* error = ctx.ota->start(req->content_len)) return badRequest(req, error);
@@ -868,8 +894,12 @@ esp_err_t postOta(httpd_req_t* req) {
     remaining -= received;
   }
   if (const char* error = ctx.ota->finish()) return badRequest(req, error);
-  sys::restartLater(2000);
-  return sendText(req, "200 OK", "Update stored; the monitor restarts now.");
+  char text[112];
+  snprintf(text, sizeof text,
+           "Stored. To install it, hold any button on the monitor for %u s within %u minutes.",
+           static_cast<unsigned>(Ota::kConfirmHoldMs / 1000),
+           static_cast<unsigned>(Ota::kConfirmWindowMs / 60000));
+  return sendText(req, "202 Accepted", text);
 }
 
 }  // namespace
@@ -901,6 +931,7 @@ bool begin(const Context& context) {
       {"/api/mqtt", HTTP_GET, getMqtt, nullptr},
       {"/api/mqtt", HTTP_POST, postMqtt, nullptr},
       {"/api/auth", HTTP_GET, getAuth, nullptr},
+      {"/api/ota", HTTP_GET, getOta, nullptr},
       {"/api/ota", HTTP_POST, postOta, nullptr},
   };
   for (const httpd_uri_t& route : routes) httpd_register_uri_handler(server, &route);

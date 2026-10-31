@@ -27,7 +27,8 @@ humidity, all in green](docs/screen.png)
 - Wi-Fi setup from a phone, no reprogramming: scan the QR code on the screen and pick your network. Up to five
   networks are saved; the monitor joins the strongest one in range.
 - A web page on your network with live values (optionally with the sensor's tolerance), trend charts, settings,
-  maintenance and firmware updates over Wi-Fi (with automatic rollback if an update fails).
+  maintenance and firmware updates over Wi-Fi (confirmed with a button on the monitor, and rolled back
+  automatically if an update fails).
 - Home Assistant integration: the monitor appears as a device with a sensor for every value.
 - Works fully offline; Wi-Fi is optional and everything stays on your network (no cloud).
 
@@ -135,6 +136,7 @@ Small symbols next to each button show what it does on the current screen.
 | Confirmation (e.g. factory reset) | cancel | **hold**: confirm | cancel |
 | Alert | dismiss | dismiss | dismiss |
 | Wi-Fi setup screen | – | cancel, or done once connected | – |
+| Firmware update sent from the web page | **hold 5 s**: install · press: refuse | same | same |
 
 Pages: *Air quality* (overview), *Particles*, *Gases*, *Comfort*, the trend of the last hour, the trend of the
 last 24 hours, *Wi-Fi* and *Device*.
@@ -239,7 +241,8 @@ don't reuse a valuable password.
 
 Against guessing: after 3 wrong passwords in a row, the monitor refuses every password for a minute, then twice as
 long after each further miss, but never more than 15 minutes, so someone trying can't lock you out for longer. The
-*Device* page on the monitor and on the web page count the wrong passwords.
+*Device* page on the monitor and on the web page count the wrong passwords. And a firmware update only installs
+once someone holds a button on the monitor itself, so even a stolen password isn't enough to replace the firmware.
 
 ![The web page: a card per value with its accuracy, and a trend chart of the last hour with the sensor's
 tolerance as a shaded band](docs/web-page.png)
@@ -283,7 +286,9 @@ Wi-Fi: on the web page open *Firmware update* and choose
 sen69c-esp32-tft-air-monitor/.pio/build/feather_s3_reversetft/firmware.bin
 ```
 
-(not `firmware.factory.bin`, which is only for USB). `.pio` is a hidden folder on macOS and Linux: in the file
+(not `firmware.factory.bin`, which is only for USB). Once it's uploaded, the monitor asks whether to install it:
+**hold any of its buttons for 5 s** to install it. A short press refuses it, and so does waiting 2 minutes; the
+web page shows which happened. `.pio` is a hidden folder on macOS and Linux: in the file
 chooser press Cmd+Shift+. (macOS) or Ctrl+H (Linux) to see it. Or, from a command line in the project folder
 (in VS Code: *Terminal → New Terminal*), with the web password from the monitor's Wi-Fi page and your monitor's
 address (any user name works; on Windows type `curl.exe`):
@@ -292,7 +297,7 @@ address (any user name works; on Windows type `curl.exe`):
 curl -u any:WEBPASSWORD --data-binary @.pio/build/feather_s3_reversetft/firmware.bin http://airmonitor-a1b2.local/api/ota
 ```
 
-The monitor restarts into the new firmware, which confirms itself once it has rejoined Wi-Fi. If it crashes
+and then hold a button on the monitor as above. The monitor restarts into the new firmware, which confirms itself once it has rejoined Wi-Fi. If it crashes
 first, or can't rejoin within 5 minutes, the monitor goes back to the previous firmware.
 
 ## Troubleshooting

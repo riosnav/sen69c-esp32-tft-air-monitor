@@ -14,7 +14,8 @@
 //   GET  /api/wifi      POST: scan, connect, save, forget, address, finish *
 //   GET  /api/mqtt      Home Assistant broker settings and state; POST changes them *
 //   GET  /api/auth      204 if the request carries the web password
-//   POST /api/ota       firmware image as the body *
+//   GET  /api/ota       state of an update: confirming on the monitor, accepted, ...
+//   POST /api/ota       firmware image as the body; installed once confirmed on the monitor *
 //
 // * needs the web password (HTTP basic auth, any user name), except through
 //   the setup hotspot: joining it already took the password on the screen.

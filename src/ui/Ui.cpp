@@ -27,10 +27,16 @@ E stepEnum(E value, int delta, E count) {
 
 uint8_t backlight(uint8_t percent) { return static_cast<uint8_t>(percent * 255 / 100); }
 
+// Whether an update fills the screen.
+bool updating(OtaState state) {
+  return state == OtaState::Receiving || state == OtaState::Confirming ||
+         state == OtaState::Accepted;
+}
+
 }  // namespace
 
 void Ui::begin(SensorService& sensor, Settings& settings, const aq::AirQuality& airQuality,
-               const aq::MetricHistory& history, WifiService& wifi, const Ota& ota,
+               const aq::MetricHistory& history, WifiService& wifi, Ota& ota,
                const MqttService& mqtt) {
   sensor_ = &sensor;
   settings_ = &settings;
@@ -64,6 +70,7 @@ void Ui::update(const SensorSnapshot& snapshot, uint32_t nowMs) {
     showToast(snapshot.result, nowMs);
   }
   updateAlerts(nowMs);
+  updatePrompt(nowMs);
   for (size_t i = 0; i < 3; ++i) {
     const bool down = digitalRead(kButtonPins[i]) == kPressedLevel[i];
     handleButton(i, buttons_[i].update(down, nowMs), nowMs);
@@ -88,6 +95,10 @@ void Ui::handleButton(size_t button, aq::ButtonEvent event, uint32_t nowMs) {
   using aq::ButtonEvent;
   if (event == ButtonEvent::None) return;
   lastInputMs_ = nowMs;
+  if (ota_->state() == OtaState::Confirming) {
+    onUpdatePromptEvent(button, event, nowMs);
+    return;
+  }
   if (event == ButtonEvent::Press) {
     // A press that wakes the screen does nothing else.
     if (dimmed_) {
@@ -97,7 +108,7 @@ void Ui::handleButton(size_t button, aq::ButtonEvent event, uint32_t nowMs) {
     return;
   }
   dirty_ = true;
-  if (ota_->active() || ota_->succeeded()) return;  // nothing to do but wait
+  if (updating(ota_->state())) return;  // nothing to do but wait
   if (wifi_->setupActive()) {
     // D1 cancels the setup, or closes it once it has worked.
     if (button == 1 && event == ButtonEvent::Click) wifi_->stopSetup();
@@ -194,6 +205,50 @@ void Ui::onConfirmEvent(size_t button, aq::ButtonEvent event) {
     execute(confirmItem_);
   } else if (button != 1 && event == ButtonEvent::Click) {
     mode_ = Mode::Menu;
+  }
+}
+
+// Holding any button says yes (see updatePrompt); a short press says no.
+void Ui::onUpdatePromptEvent(size_t button, aq::ButtonEvent event, uint32_t nowMs) {
+  if (event == aq::ButtonEvent::Press && !holding_) {
+    holding_ = true;
+    holdButton_ = button;
+    holdStartMs_ = nowMs;
+  } else if (event == aq::ButtonEvent::Click) {
+    ota_->refuse();
+  }
+  dirty_ = true;
+}
+
+// Notices an update arriving and ending, and how long the button is held.
+void Ui::updatePrompt(uint32_t nowMs) {
+  const OtaState state = ota_->state();
+  if (state != otaState_) {
+    otaState_ = state;
+    holding_ = false;
+    dirty_ = true;
+    switch (state) {
+      case OtaState::Confirming:
+        lastInputMs_ = nowMs;  // wake the screen
+        break;
+      case OtaState::Refused:
+        showToast("Update refused", nowMs);
+        break;
+      case OtaState::TimedOut:
+        showToast("Update not confirmed", nowMs);
+        break;
+      case OtaState::Failed:
+        showToast("Update could not be installed", nowMs);
+        break;
+      default:
+        break;
+    }
+  }
+  if (state != OtaState::Confirming || !holding_) return;
+  if (!buttons_[holdButton_].pressed()) {
+    ota_->refuse();  // let go too soon
+  } else if (nowMs - holdStartMs_ >= Ota::kConfirmHoldMs) {
+    ota_->confirm();
   }
 }
 
@@ -352,7 +407,7 @@ void Ui::dismissAlert() {
 
 void Ui::updateBacklight(uint32_t nowMs) {
   // Screens that show something to scan or wait for stay bright.
-  const bool fullScreen = wifi_->setupActive() || ota_->active() || ota_->succeeded();
+  const bool fullScreen = wifi_->setupActive() || updating(ota_->state());
   const bool dim = settings_->dimAfterS != 0 && mode_ == Mode::Pages && !fullScreen &&
                    !alertVisible_ && nowMs - lastInputMs_ >= settings_->dimAfterS * 1000UL;
   if (dim == dimmed_) return;

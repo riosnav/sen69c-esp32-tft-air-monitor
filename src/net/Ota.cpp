@@ -7,10 +7,14 @@
 
 #include <cstring>
 
+#include "System.h"
+
 namespace {
 
 // How long a new image has to rejoin Wi-Fi before it's rolled back.
 constexpr uint32_t kProbationMs = 5 * 60000;
+// After a yes, time for the web page to hear it before the restart.
+constexpr uint32_t kRestartDelayMs = 3000;
 
 // An app image starts with the image header, the first segment's header and
 // the app description.
@@ -29,6 +33,12 @@ void Ota::begin() {
 }
 
 void Ota::loop(bool connected, bool offline, uint32_t nowMs) {
+  OtaState confirming = OtaState::Confirming;
+  if (static_cast<int32_t>(nowMs - deadlineMs_) >= 0 &&
+      state_.compare_exchange_strong(confirming, OtaState::TimedOut)) {
+    Serial.println("OTA: not confirmed on the monitor; update discarded");
+  }
+
   if (!probation_) return;
   if (connected || offline) {
     probation_ = false;
@@ -42,9 +52,13 @@ void Ota::loop(bool connected, bool offline, uint32_t nowMs) {
 }
 
 const char* Ota::start(size_t size) {
-  bool expected = false;
-  if (!active_.compare_exchange_strong(expected, true)) return "Another update is running";
-  succeeded_ = false;
+  OtaState current = state_;
+  do {
+    if (current == OtaState::Receiving || current == OtaState::Confirming ||
+        current == OtaState::Accepted) {
+      return "Another update is running";
+    }
+  } while (!state_.compare_exchange_weak(current, OtaState::Receiving));
   written_ = 0;
   size_ = size;
   partition_ = esp_ota_get_next_update_partition(nullptr);
@@ -83,23 +97,47 @@ const char* Ota::finish() {
   const esp_err_t err = esp_ota_end(handle_);
   handle_ = 0;
   if (err != ESP_OK) return fail("The image is damaged");
-  if (esp_ota_set_boot_partition(partition_) != ESP_OK) return fail("Could not select the image");
-  Serial.println("OTA: update stored");
-  succeeded_ = true;
-  active_ = false;
+  Serial.println("OTA: update stored; waiting for confirmation on the monitor");
+  deadlineMs_ = millis() + kConfirmWindowMs;
+  state_ = OtaState::Confirming;
   return nullptr;
 }
 
 void Ota::abort() { fail(nullptr); }
 
+void Ota::confirm() {
+  OtaState confirming = OtaState::Confirming;
+  if (!state_.compare_exchange_strong(confirming, OtaState::Accepted)) return;
+  if (esp_ota_set_boot_partition(partition_) != ESP_OK) {
+    Serial.println("OTA: could not select the image");
+    state_ = OtaState::Failed;
+    return;
+  }
+  Serial.println("OTA: confirmed on the monitor; restarting into it");
+  sys::restartLater(kRestartDelayMs);
+}
+
+void Ota::refuse() {
+  OtaState confirming = OtaState::Confirming;
+  if (state_.compare_exchange_strong(confirming, OtaState::Refused)) {
+    Serial.println("OTA: refused on the monitor; update discarded");
+  }
+}
+
 const char* Ota::fail(const char* reason) {
   if (handle_ != 0) esp_ota_abort(handle_);
   handle_ = 0;
   if (reason != nullptr) Serial.printf("OTA: %s\n", reason);
-  active_ = false;
+  state_ = OtaState::Idle;
   return reason;
 }
 
 uint8_t Ota::percent() const {
   return size_ == 0 ? 0 : static_cast<uint8_t>(static_cast<uint64_t>(written_.load()) * 100 / size_);
+}
+
+uint32_t Ota::secondsLeft(uint32_t nowMs) const {
+  if (state_ != OtaState::Confirming) return 0;
+  const int32_t left = static_cast<int32_t>(deadlineMs_ - nowMs);
+  return left > 0 ? (static_cast<uint32_t>(left) + 999) / 1000 : 0;
 }

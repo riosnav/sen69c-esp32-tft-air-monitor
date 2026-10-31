@@ -172,7 +172,14 @@ void Ui::draw(uint32_t nowMs) {
 
   frame_.fillScreen(theme::kBackground);
   // These take over the whole screen.
-  if (ota_->active() || ota_->succeeded()) {
+  const OtaState ota = ota_->state();
+  if (ota == OtaState::Confirming) {
+    drawUpdatePrompt(nowMs);
+    drawHints(Hint::Check, Hint::Check, Hint::Check);
+    frame_.pushSprite(0, 0);
+    return;
+  }
+  if (ota == OtaState::Receiving || ota == OtaState::Accepted) {
     drawUpdate();
     frame_.pushSprite(0, 0);
     return;
@@ -780,7 +787,7 @@ void Ui::drawLink() {
 }
 
 void Ui::drawUpdate() {
-  const bool done = ota_->succeeded();
+  const bool done = ota_->state() == OtaState::Accepted;
   const int percent = done ? 100 : ota_->percent();
   constexpr int kWidth = kRight - kLeft;
   frame_.setFont(kMedium);
@@ -795,6 +802,28 @@ void Ui::drawUpdate() {
     drawRich(frame_, (String(percent) + " %").c_str(), kLeft, 92, theme::kMuted);
   }
   drawRich(frame_, "Keep the power on", kLeft, 120, theme::kMuted);
+}
+
+// An uploaded update, waiting for a yes on the monitor itself.
+void Ui::drawUpdatePrompt(uint32_t nowMs) {
+  constexpr int kWidth = kRight - kLeft;
+  frame_.setFont(kMedium);
+  drawRich(frame_, "Install update?", kLeft, 30, theme::kText);
+  frame_.setFont(kBody);
+  drawRich(frame_, "New firmware was sent", kLeft, 52, theme::kMuted);
+  drawRich(frame_, "from the web page.", kLeft, 67, theme::kMuted);
+  if (holding_) {
+    const uint32_t held = std::min<uint32_t>(nowMs - holdStartMs_, Ota::kConfirmHoldMs);
+    drawRich(frame_, "Keep holding...", kLeft, 92, theme::kAccent);
+    frame_.drawRect(kLeft, 100, kWidth, 10, theme::kMuted);
+    frame_.fillRect(kLeft + 2, 102, (kWidth - 4) * held / Ota::kConfirmHoldMs, 6, theme::kAccent);
+  } else {
+    drawRich(frame_, "Hold any button 5 s: install", kLeft, 92, theme::kAccent);
+    drawRich(frame_, "Press briefly: refuse", kLeft, 108, theme::kText);
+  }
+  frame_.setFont(kSmall);
+  const String left = "Refused by itself in " + String(ota_->secondsLeft(nowMs)) + " s";
+  drawRich(frame_, left.c_str(), kLeft, 129, theme::kMuted);
 }
 
 // A QR code at the right edge, in a white square with a quiet zone of two

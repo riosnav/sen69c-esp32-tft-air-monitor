@@ -212,7 +212,7 @@ footer { color: var(--muted); font-size: 12px; margin-top: 30px; }
   <details class="card">
     <summary>Firmware update</summary>
     <p id="version"></p>
-    <p class="hint">Upload a <code>firmware.bin</code> (not <code>firmware.factory.bin</code>). If the new firmware can't rejoin Wi-Fi within 5 minutes, the monitor goes back to the current one.</p>
+    <p class="hint">Upload a <code>firmware.bin</code> (not <code>firmware.factory.bin</code>), then confirm it on the monitor by holding any of its buttons for 5 s. If the new firmware can't rejoin Wi-Fi within 5 minutes, the monitor goes back to the current one.</p>
     <p><input type="file" id="firmware" accept=".bin"></p>
     <button type="button" class="primary" id="upload">Update</button>
     <p><progress id="ota-progress" max="1" value="0" hidden></progress></p>
@@ -1039,9 +1039,10 @@ $('#upload').addEventListener('click', async () => {
   for (const [name, value] of Object.entries(apiHeaders())) xhr.setRequestHeader(name, value);
   xhr.upload.addEventListener('progress', (e) => { if (e.lengthComputable) bar.value = e.loaded / e.total; });
   xhr.addEventListener('load', () => {
-    if (xhr.status === 200) {
-      message('ota-msg', 'Done. The monitor restarts; this page reloads in 20 s.');
-      setTimeout(() => location.reload(), 20000);
+    if (xhr.status === 202) {
+      bar.hidden = true;
+      message('ota-msg', xhr.responseText);
+      waitForConfirmation();
     } else {
       bar.hidden = true;
       message('ota-msg', xhr.responseText || `Update failed (${xhr.status})`, true);
@@ -1053,6 +1054,36 @@ $('#upload').addEventListener('click', async () => {
   });
   xhr.send(file);
 });
+
+// After the upload, the monitor waits for someone to hold one of its buttons.
+async function waitForConfirmation() {
+  for (;;) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    let ota;
+    try {
+      ota = await request('/api/ota');
+    } catch (e) {
+      continue;  // briefly unreachable
+    }
+    switch (ota.state) {
+      case 'confirming':
+        message('ota-msg', `Uploaded. To install it, hold any button on the monitor for 5 s (${ota.secondsLeft} s left).`);
+        break;
+      case 'accepted':
+        message('ota-msg', 'Confirmed on the monitor. It restarts now; this page reloads in 20 s.');
+        setTimeout(() => location.reload(), 20000);
+        return;
+      case 'refused':
+        return message('ota-msg', 'Refused on the monitor; the update was discarded.', true);
+      case 'timedOut':
+        return message('ota-msg', 'Not confirmed on the monitor in time; the update was discarded.', true);
+      case 'failed':
+        return message('ota-msg', 'Confirmed, but the monitor could not install it.', true);
+      default:
+        return message('ota-msg', 'The update is no longer waiting. Reload the page to see which version runs.', true);
+    }
+  }
+}
 
 // ---------------------------------------------------------------- start
 
