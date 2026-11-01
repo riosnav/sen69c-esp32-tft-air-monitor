@@ -8,6 +8,8 @@
 //   GET  /setup         setup page
 //   GET  /api/state     readings, levels and status
 //   GET  /api/history   ?metric=co2&range=hour|day|week (10 s, 1 min, 5 min means)
+//   GET  /api/history.csv  every value's 1 min means for the 7 days; the first
+//                       column says how many seconds ago each minute started
 //   GET  /api/settings  POST changes them *
 //   POST /api/action    clean fan, heat the humidity sensor, calibrate CO2, reset
 //                       the CO2 calibration, clear sensor errors, restart *

@@ -86,6 +86,9 @@ class MetricHistory {
 
   const Fine& fine(Metric m) const { return fine_[idx(m)]; }
   const Coarse& coarse(Metric m) const { return coarse_[idx(m)]; }
+  // When the 1 min mean still being collected started (as `nowMs`); the
+  // newest one in coarse() is of the minute before.
+  uint32_t coarseStartMs() const { return coarseStartMs_; }
 
  private:
   std::array<Fine, kMetricCount> fine_;

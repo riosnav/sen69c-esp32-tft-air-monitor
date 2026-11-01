@@ -98,6 +98,8 @@ footer { color: var(--muted); font-size: 12px; margin-top: 30px; }
     </div>
     <canvas id="chart"></canvas>
     <div id="chart-stats" class="stats"></div>
+    <div class="row"><button type="button" class="plain" id="download">Download all values (CSV)</button><span class="hint">every minute of the last 7 days</span></div>
+    <p id="download-msg" class="msg"></p>
   </div>
 
   <h2>Device</h2>
@@ -835,6 +837,35 @@ function drawChart() {
   g.fillText(text, bx + 7, top + 12);
 }
 
+// Every value of the last 7 days as a CSV file, a row per minute. The monitor
+// has no clock: it says how long ago each minute started, and this browser's
+// clock turns that into the time.
+async function downloadHistory() {
+  const button = $('#download');
+  button.disabled = true;
+  message('download-msg', 'Preparing…');
+  try {
+    const at = Date.now();
+    const lines = (await request('/api/history.csv')).trim().split(/\r?\n/);
+    const pad = (n) => String(n).padStart(2, '0');
+    const stamp = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const rows = lines.map((line, i) => {
+      const comma = line.indexOf(',');
+      const time = i === 0 ? 'Time' : stamp(new Date(at - Number(line.slice(0, comma)) * 1000));
+      return time + line.slice(comma);
+    });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([rows.join('\r\n') + '\r\n'], { type: 'text/csv' }));
+    link.download = `${state ? state.host : 'air-monitor'} ${stamp(new Date(at)).replace(':', '-')}.csv`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+    message('download-msg', `${rows.length - 1} minutes saved.`);
+  } catch (err) {
+    message('download-msg', err.message, true);
+  }
+  button.disabled = false;
+}
+
 // ---------------------------------------------------------------- settings
 
 async function loadSettings() {
@@ -1142,6 +1173,7 @@ document.querySelectorAll('.seg button').forEach((button) => button.addEventList
   loadChart();
 }));
 $('#chart-metric').addEventListener('change', (e) => selectMetric(e.target.value, false));
+$('#download').addEventListener('click', downloadHistory);
 window.addEventListener('resize', drawChart);
 // Hovering (mouse) or touching and sliding sideways (touch) shows the value at that time.
 for (const type of ['pointerdown', 'pointermove']) {

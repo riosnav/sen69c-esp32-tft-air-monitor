@@ -527,6 +527,71 @@ esp_err_t getHistory(httpd_req_t* req) {
   return httpd_resp_send_chunk(req, nullptr, 0);
 }
 
+// Every value's 1 min means, oldest first, as CSV. The monitor has no clock,
+// so the first column says how many seconds ago each minute started; the web
+// page turns that into times.
+esp_err_t getHistoryCsv(httpd_req_t* req) {
+  using Coarse = aq::MetricHistory::Coarse;
+  static constexpr const char* kColumns[aq::kMetricCount] = {
+      "PM1 (ug/m3)", "PM2.5 (ug/m3)", "PM4 (ug/m3)", "PM10 (ug/m3)",    "CO2 (ppm)",
+      "HCHO (ppb)",  "VOC index",     "NOx index",   "Temperature (C)", "Humidity (%)"};
+  constexpr size_t kRows = Coarse::capacity();
+  constexpr uint32_t kPeriodS = aq::MetricHistory::kCoarsePeriodMs / 1000;
+  constexpr size_t kTextBytes = 4096;
+  constexpr size_t kTemperature = aq::idx(Metric::Temperature);
+
+  // Copy under the lock (~400 KB, so into PSRAM), then send without holding it.
+  std::unique_ptr<float, decltype(&free)> copy(
+      static_cast<float*>(ps_malloc(kRows * aq::kMetricCount * sizeof(float))), &free);
+  std::unique_ptr<char[]> text(new (std::nothrow) char[kTextBytes]);
+  if (!copy || !text) return httpd_resp_send_500(req);
+  float* values = copy.get();  // one metric after the other
+  size_t count = 0;
+  uint32_t sinceNewestS = 0;  // since the newest mean's minute ended
+  bool fahrenheit = false;
+  {
+    AppLock lock;
+    for (size_t m = 0; m < aq::kMetricCount; ++m) {
+      const Coarse& ring = ctx.history->coarse(static_cast<Metric>(m));
+      count = ring.size();
+      for (size_t i = 0; i < count; ++i) values[m * kRows + i] = ring[i];
+    }
+    sinceNewestS = (millis() - ctx.history->coarseStartMs()) / 1000;
+    fahrenheit = ctx.settings->fahrenheit;
+  }
+
+  httpd_resp_set_type(req, "text/csv");
+  httpd_resp_set_hdr(req, "Content-Disposition", "attachment; filename=\"air-monitor-history.csv\"");
+  httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+  char* buffer = text.get();
+  int n = snprintf(buffer, kTextBytes, "Seconds ago");
+  for (size_t m = 0; m < aq::kMetricCount; ++m) {
+    const char* name = m == kTemperature && fahrenheit ? "Temperature (F)" : kColumns[m];
+    n += snprintf(buffer + n, kTextBytes - n, ",%s", name);
+  }
+  n += snprintf(buffer + n, kTextBytes - n, "\r\n");
+  for (size_t i = 0; i < count; ++i) {
+    if (n > static_cast<int>(kTextBytes) - 160) {  // room for a row
+      if (httpd_resp_send_chunk(req, buffer, n) != ESP_OK) return ESP_FAIL;
+      n = 0;
+    }
+    n += snprintf(buffer + n, kTextBytes - n, "%u",
+                  static_cast<unsigned>(sinceNewestS + (count - i) * kPeriodS));
+    for (size_t m = 0; m < aq::kMetricCount; ++m) {
+      float v = values[m * kRows + i];
+      if (std::isnan(v)) {
+        buffer[n++] = ',';  // no data that minute
+        continue;
+      }
+      if (m == kTemperature && fahrenheit) v = v * 9 / 5 + 32;
+      n += snprintf(buffer + n, kTextBytes - n, ",%.*f", aq::kMetricDecimals[m], v);
+    }
+    n += snprintf(buffer + n, kTextBytes - n, "\r\n");
+  }
+  if (httpd_resp_send_chunk(req, buffer, n) != ESP_OK) return ESP_FAIL;
+  return httpd_resp_send_chunk(req, nullptr, 0);
+}
+
 // ---------------------------------------------------------------- settings
 
 void addSettings(cJSON* r, const Settings& s) {
@@ -975,6 +1040,7 @@ bool begin(const Context& context) {
       {"/setup", HTTP_GET, getSetup, nullptr},
       {"/api/state", HTTP_GET, getState, nullptr},
       {"/api/history", HTTP_GET, getHistory, nullptr},
+      {"/api/history.csv", HTTP_GET, getHistoryCsv, nullptr},
       {"/api/settings", HTTP_GET, getSettings, nullptr},
       {"/api/settings", HTTP_POST, postSettings, nullptr},
       {"/api/action", HTTP_POST, postAction, nullptr},

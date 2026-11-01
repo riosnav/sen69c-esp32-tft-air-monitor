@@ -26,9 +26,9 @@ humidity, all in green](docs/screen.png)
 - A settings menu on the device, worked with its three buttons. Settings survive restarts and power cuts.
 - Wi-Fi setup from a phone, no reprogramming: scan the QR code on the screen and pick your network. Up to five
   networks are saved; the monitor joins the strongest one in range.
-- A web page on your network with live values (optionally with the sensor's tolerance), trend charts, settings,
-  maintenance and firmware updates over Wi-Fi (confirmed with a button on the monitor, and rolled back
-  automatically if an update fails).
+- A web page on your network with live values (optionally with the sensor's tolerance), trend charts, a CSV
+  download of the last 7 days, settings, maintenance and firmware updates over Wi-Fi (confirmed with a button on
+  the monitor, and rolled back automatically if an update fails).
 - Home Assistant integration: the monitor appears as a device with a sensor for every value.
 - Works fully offline; Wi-Fi is optional and everything stays on your network (no cloud).
 
@@ -191,7 +191,7 @@ values. The VOC and NOₓ indices have no tolerance: every sensor reads 100 and 
 ### Settings
 
 Hold **D1** to open them. They are kept through restarts and power cuts. The trend graphs are not: they are kept
-in memory and start over after a restart or update.
+in memory and start over after a restart or update (the web page can download them first, as a CSV file).
 
 | Setting | What it does |
 |---|---|
@@ -374,7 +374,8 @@ the UI. The screenshot at the top of this README comes from it. Its README expla
 
 The web page uses a small JSON API (`/api/state`, `/api/history?metric=co2&range=hour|day|week`, `/api/settings`,
 ...), listed at the top of [src/net/Web.h](src/net/Web.h). Metric names: `pm1 pm25 pm4 pm10 co2 hcho voc nox
-temp rh`.
+temp rh`. `/api/history.csv` has every value's 1-minute means for the last 7 days. The monitor has no clock, so
+its first column says how many seconds ago each minute started; the web page's download turns that into times.
 
 Over MQTT, with `<host>` the monitor's host name (e.g. `airmonitor-a1b2`): `<host>/state` carries all the values
 as JSON, `<host>/status` is `online` or `offline`, and the discovery message is
