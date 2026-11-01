@@ -150,11 +150,15 @@ shot menu/12-heating.png
 wait 23s
 shot menu/13-heated.png
 wait 5s
+menu restart-voc
+click d1
+shot menu/14-confirm-restart-voc.png
+click d0
 menu power-off
 click d1
-shot menu/14-confirm-power-off.png
+shot menu/15-confirm-power-off.png
 hold d1
-shot menu/15-switching-off.png
+shot menu/16-switching-off.png
 power-on
 
 # The Wi-Fi page

@@ -120,6 +120,8 @@ void SensorService::recalibrateCo2(uint16_t referencePpm) {
 
 void SensorService::resetCo2Calibration() { send({CommandType::ResetCo2Calibration, {}, 0}); }
 
+void SensorService::restartVocLearning() { send({CommandType::RestartVocLearning, {}, 0}); }
+
 void SensorService::clearErrors() { send({CommandType::ClearErrors, {}, 0}); }
 
 void SensorService::powerDown(uint32_t timeoutMs) {
@@ -342,6 +344,14 @@ void SensorService::handle(const Command& cmd) {
       setResult(sen_.performCo2SensorFactoryReset() == 0 ? "CO2 calibration reset"
                                                          : "CO2 reset failed");
       restarted = startMeasurement(false);  // sets self-calibration again
+      break;
+    case CommandType::RestartVocLearning:
+      // Only a reset or a power cut restarts the VOC algorithm (datasheet). The
+      // sensor also forgets its settings, which the start sets again.
+      setState(SensorState::Busy, "Restarting VOC");
+      stopMeasurement();
+      setResult(sen_.deviceReset() == 0 ? "VOC learning restarted" : "VOC restart failed");
+      restarted = startMeasurement(false);
       break;
     case CommandType::ClearErrors: {
       SEN69CDeviceStatus status{};

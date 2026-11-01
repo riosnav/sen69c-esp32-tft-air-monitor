@@ -79,6 +79,7 @@ struct Inside {
       {"reset-co2", Item::ResetCo2},
       {"clean-fan", Item::CleanFan},
       {"heat-humidity-sensor", Item::HeatHumiditySensor},
+      {"restart-voc", Item::RestartVoc},
       {"restart", Item::Restart},
       {"power-off", Item::PowerOff},
       {"factory-reset", Item::FactoryReset},

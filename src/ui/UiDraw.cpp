@@ -41,7 +41,7 @@ constexpr const char* kItemLabels[] = {
     "Brightness",   "Dim after",    "Units",          "Status LED",
     "Wi-Fi",        "Set up Wi-Fi", "Forget Wi-Fi",
     "Temp. offset", "Altitude",     "CO_2 self-calibration", "Calibrate CO_2",
-    "Reset CO_2 calibration", "Clean fan", "Heat humidity sensor",
+    "Reset CO_2 calibration", "Clean fan", "Heat humidity sensor", "Restart VOC learning",
     "Restart",      "Power off",    "Factory reset", "Close",
 };
 
@@ -930,6 +930,11 @@ void Ui::drawConfirm() {
       title = "Heat RH sensor?";
       line1 = "Fixes high humidity readings";
       line2 = "after damp air. About 1 min.";
+      break;
+    case Item::RestartVoc:
+      title = "Restart VOC?";
+      line1 = "VOC and NO_x relearn the air";
+      line2 = "over 12 h, like unplugging.";
       break;
     case Item::CalibrateCo2:
       title = "Calibrate CO_2?";

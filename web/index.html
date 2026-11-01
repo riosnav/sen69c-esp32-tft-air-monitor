@@ -206,6 +206,10 @@ footer { color: var(--muted); font-size: 12px; margin-top: 30px; }
       <button type="button" class="plain" id="reset-co2">Reset</button>
     </div>
     <div class="task">
+      <div><strong>Restart VOC learning</strong><p class="hint">The VOC and NO&#8339; indices compare the air with what they have learned over the last hours. To start afresh, e.g. after moving the monitor to another room: readings pause for about a minute, then the indices relearn over about 12 hours. CO&#8322; calibrations are kept.</p></div>
+      <button type="button" class="plain" id="restart-voc">Restart</button>
+    </div>
+    <div class="task">
       <div><strong>Restart</strong></div>
       <button type="button" class="plain" id="restart">Restart</button>
     </div>
@@ -1065,6 +1069,11 @@ $('#heat').addEventListener('click', () =>
 $('#reset-co2').addEventListener('click', () => {
   if (confirm('Erase every CO₂ calibration? Self-calibration starts over, so the CO₂ reading may be off until the monitor has seen fresh air for a while.')) {
     action({ action: 'resetCo2Calibration' }, 'Reset started; the monitor shows the result.');
+  }
+});
+$('#restart-voc').addEventListener('click', () => {
+  if (confirm('Restart VOC learning? The VOC and NOₓ indices then relearn this room’s usual air over about 12 hours.')) {
+    action({ action: 'restartVocLearning' }, 'Restart started; readings pause for about a minute.');
   }
 });
 $('#calibrate').addEventListener('click', () => {

@@ -68,6 +68,7 @@ class Ui {
     ResetCo2,
     CleanFan,
     HeatHumiditySensor,
+    RestartVoc,
     Restart,
     PowerOff,
     FactoryReset,

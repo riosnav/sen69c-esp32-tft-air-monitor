@@ -726,6 +726,8 @@ esp_err_t postAction(httpd_req_t* req) {
     ctx.sensor->heatHumiditySensor();
   } else if (strcmp(action, "resetCo2Calibration") == 0) {
     ctx.sensor->resetCo2Calibration();
+  } else if (strcmp(action, "restartVocLearning") == 0) {
+    ctx.sensor->restartVocLearning();
   } else if (strcmp(action, "clearErrors") == 0) {
     ctx.sensor->clearErrors();
   } else if (strcmp(action, "calibrateCo2") == 0) {

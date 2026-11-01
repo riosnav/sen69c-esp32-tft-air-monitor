@@ -283,6 +283,7 @@ void Ui::select(Item item) {
       break;
     case Item::CleanFan:
     case Item::HeatHumiditySensor:
+    case Item::RestartVoc:
     case Item::CalibrateCo2:
     case Item::ResetCo2:
     case Item::ForgetWifi:
@@ -347,6 +348,9 @@ void Ui::execute(Item item) {
       break;
     case Item::HeatHumiditySensor:
       sensor_->heatHumiditySensor();
+      break;
+    case Item::RestartVoc:
+      sensor_->restartVocLearning();
       break;
     case Item::CalibrateCo2:
       sensor_->recalibrateCo2(kOutdoorCo2Ppm);

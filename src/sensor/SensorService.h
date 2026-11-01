@@ -67,6 +67,9 @@ class SensorService {
   void recalibrateCo2(uint16_t referencePpm);
   // Erases every CO2 calibration, forced or automatic.
   void resetCo2Calibration();
+  // Resets the sensor as unplugging it would, so the VOC and NOx indices learn
+  // the room's usual air afresh. CO2 calibrations are kept.
+  void restartVocLearning();
   // Most error flags stay set until cleared, even once the error is gone.
   void clearErrors();
   // Before powering off: lets the battery monitor hibernate again and stops
@@ -80,6 +83,7 @@ class SensorService {
     HeatHumiditySensor,
     RecalibrateCo2,
     ResetCo2Calibration,
+    RestartVocLearning,
     ClearErrors,
     PowerDown,
   };

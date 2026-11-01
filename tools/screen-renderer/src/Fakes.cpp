@@ -62,6 +62,10 @@ void SensorService::resetCo2Calibration() {
   world.startOperation("Resetting CO2", 3000, "CO2 calibration reset");
 }
 
+void SensorService::restartVocLearning() {
+  world.startOperation("Restarting VOC", 30000, "VOC learning restarted");
+}
+
 void SensorService::clearErrors() {
   world.sensor.deviceStatus = 0;
   world.showResult("Sensor errors cleared");
