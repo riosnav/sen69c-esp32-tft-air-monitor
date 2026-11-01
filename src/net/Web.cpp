@@ -783,6 +783,8 @@ esp_err_t getWifi(httpd_req_t* req) {
     cJSON_AddStringToObject(r, "ssid", w.ssid());
     cJSON_AddNumberToObject(r, "rssi", w.rssi());
     cJSON_AddStringToObject(r, "ip", w.state() == WifiState::Connected ? w.ip().toString().c_str() : "");
+    const IPAddress routerIp = w.routerIp();
+    cJSON_AddStringToObject(r, "routerIp", uint32_t(routerIp) != 0 ? routerIp.toString().c_str() : "");
     const String host = String(device::hostname()) + ".local";
     cJSON_AddStringToObject(r, "host", host.c_str());
 

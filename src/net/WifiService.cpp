@@ -21,6 +21,12 @@ constexpr uint32_t kSetupIdleMs = 10 * 60000;  // the hotspot closes when nobody
 constexpr uint32_t kSetupMaxMs = 30 * 60000;
 constexpr uint32_t kSetupDoneMs = 2 * 60000;  // after success, so the phone can show the result
 constexpr uint32_t kSetupStopDelayMs = 1500;
+// After a new address for the network in use: long enough for the web page
+// to get its answer over the old one.
+constexpr uint32_t kRejoinDelayMs = 1000;
+// Joining again before the old connection is gone can fail: an address change
+// once took 35 s, its first attempt timing out.
+constexpr uint32_t kDisconnectWaitMs = 1000;
 constexpr size_t kHotspotPasswordLength = 8;
 
 bool due(uint32_t nowMs, uint32_t atMs) { return static_cast<int32_t>(nowMs - atMs) >= 0; }
@@ -80,6 +86,13 @@ void WifiService::loop(uint32_t nowMs) {
   if (setupStopPending_ && due(nowMs, setupStopAtMs_)) stopSetup();
   updateMode(nowMs);
   if (mode_ == WIFI_MODE_NULL) return;
+  if (rejoinPending_ && due(nowMs, rejoinAtMs_)) {
+    rejoinPending_ = false;
+    if (state_ == WifiState::Connected || state_ == WifiState::Connecting) {
+      Serial.printf("Wi-Fi: new address for %s; rejoining\n", ssid_);
+      rejoin(ssid_, nowMs);
+    }
+  }
   pollScan(nowMs);
   if (setupActive()) loopSetup(nowMs);
 
@@ -214,7 +227,7 @@ void WifiService::connectNext(uint32_t nowMs) {
   const Attempt& a = attempts_[nextAttempt_++];
   strlcpy(ssid_, a.network.ssid, sizeof ssid_);
   Serial.printf("Wi-Fi: connecting to %s\n", ssid_);
-  WiFi.disconnect();
+  WiFi.disconnect(false, false, kDisconnectWaitMs);
   failures_ = 0;
   lastReason_ = 0;
   const FixedAddress& f = a.network.address;
@@ -252,6 +265,7 @@ void WifiService::onConnected(uint32_t nowMs) {
   retryDelayMs_ = kFirstRetryMs;
   failedSsid_[0] = '\0';
   Serial.printf("Wi-Fi: connected to %s, %s\n", ssid_, WiFi.localIP().toString().c_str());
+  if (!staticIp_) routerIp_ = WiFi.localIP();
   if (!mdnsStarted_ && MDNS.begin(device::hostname())) {
     MDNS.addService("http", "tcp", 80);
     mdnsStarted_ = true;
@@ -334,8 +348,8 @@ bool WifiService::setAddress(const char* ssid, const FixedAddress& address) {
   if (!store_.setAddress(ssid, address)) return false;
   const bool inUse = state_ == WifiState::Connected || state_ == WifiState::Connecting;
   if (inUse && !setupActive() && strcmp(ssid, ssid_) == 0) {
-    Serial.printf("Wi-Fi: new address for %s; rejoining\n", ssid_);
-    rejoin(ssid_, millis());
+    rejoinPending_ = true;
+    rejoinAtMs_ = millis() + kRejoinDelayMs;
   }
   return true;
 }

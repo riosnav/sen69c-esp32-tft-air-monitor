@@ -930,8 +930,12 @@ $('#settings').addEventListener('submit', async (e) => {
 
 // ---------------------------------------------------------------- Wi-Fi
 
+// The last /api/wifi, for finding the monitor again after an address change.
+let lastWifi = null;
+
 async function loadWifi() {
   const w = await request('/api/wifi');
+  lastWifi = w;
   $('#wifi-status').textContent = w.state === 'connected'
     ? `Connected to ${w.ssid} (${w.rssi} dBm) as ${w.ip}, ${w.host}.`
     : `Wi-Fi is ${w.state}.`;
@@ -1000,14 +1004,52 @@ $('#address').addEventListener('submit', async (e) => {
   if (fixed) Object.assign(body, { subnet: f.subnet.value.trim(), gateway: f.gateway.value.trim(), dns: f.dns.value.trim() });
   try {
     await post('/api/wifi', body);
-    if (!e.target.dataset.inUse) message('address-msg', 'Saved. It applies the next time the monitor joins this network.');
-    else if (fixed) message('address-msg', `Saved. The monitor reconnects now; if this page stops updating, open http://${body.ip}/`);
-    else message('address-msg', 'Saved. The monitor reconnects now; its Wi-Fi page shows the address it gets.');
-    loadWifi().catch(() => {});
+    if (!e.target.dataset.inUse) {
+      message('address-msg', 'Saved. It applies the next time the monitor joins this network.');
+      loadWifi().catch(() => {});
+    } else if (fixed) {
+      followMonitor([{ url: `http://${body.ip}/` }],
+        `Saved. The monitor moves to ${body.ip} in a moment, and this page follows it there. If it doesn't, open `, '.');
+    } else {
+      // Its new address isn't known yet. Many routers give the last one again
+      // (if it had one since it started), and the name works where .local
+      // names do, once caches let go of the old address.
+      const targets = [{ url: `http://${state ? state.host : 'airmonitor'}.local/` }];
+      const earlier = lastWifi && lastWifi.routerIp;
+      if (earlier) targets.unshift({ url: `http://${earlier}/`, note: 'the address your router gave it before' });
+      followMonitor(targets,
+        'Saved. The monitor now rejoins with whatever address your router gives it. This page tries to find it at ',
+        '. If neither works, the monitor’s Wi-Fi page shows its address.');
+    }
   } catch (err) {
     message('address-msg', err.message, true);
   }
 });
+
+// The monitor answers first and rejoins a second later at its new address:
+// wait until it answers at one of `targets` ({url, note}), then open this page
+// there. The message lists them as links, between `lead` and `tail`.
+async function followMonitor(targets, lead, tail) {
+  message('address-msg', lead);
+  targets.forEach(({ url, note }, i) => {
+    const link = document.createElement('a');
+    link.href = link.textContent = url;
+    $('#address-msg').append(i === 0 ? '' : ' or ', link, note ? ` (${note})` : '');
+  });
+  $('#address-msg').append(tail);
+  const urls = targets.map((t) => t.url);
+  const answers = (url) => fetch(url + 'api/state', { mode: 'no-cors', cache: 'no-store', signal: AbortSignal.timeout(2500) })
+    .then(() => url);
+  for (let tries = 0; tries < 30; tries++) {
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    try {
+      location.href = await Promise.any(urls.map(answers));
+      return;
+    } catch (err) { /* not there yet */ }
+  }
+  const local = urls.some((url) => url.includes('.local/')) ? ' (Some devices can’t open .local names.)' : '';
+  message('address-msg', `The monitor didn't answer at ${urls.join(' or ')}.${local} Its Wi-Fi page shows the address it has.`, true);
+}
 
 $('#add-network').addEventListener('submit', async (e) => {
   e.preventDefault();

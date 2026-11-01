@@ -53,6 +53,9 @@ class WifiService {
   const char* ssid() const { return ssid_; }
   int8_t rssi() const;
   IPAddress ip() const;
+  // The last address the router gave (0.0.0.0 if none since start): most give
+  // it again, which helps find the monitor after going back from a fixed one.
+  IPAddress routerIp() const { return routerIp_; }
 
   // A saved network that was in range but couldn't be joined (e.g. its password
   // changed), and why; empty when none was in range or one was joined.
@@ -122,6 +125,7 @@ class WifiService {
   WifiState state_ = WifiState::Off;
   char ssid_[33] = "";
   bool staticIp_ = false;  // a fixed address is configured in the network stack
+  IPAddress routerIp_;
 
   // Joining saved networks.
   std::array<Attempt, WifiStore::kCapacity> attempts_{};
@@ -158,4 +162,6 @@ class WifiService {
   uint32_t setupDoneMs_ = 0;
   bool setupStopPending_ = false;
   uint32_t setupStopAtMs_ = 0;
+  bool rejoinPending_ = false;  // with a new address, see setAddress()
+  uint32_t rejoinAtMs_ = 0;
 };
