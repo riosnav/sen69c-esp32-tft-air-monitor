@@ -1044,7 +1044,8 @@ void Ui::drawPoweringOff() {
   drawRich(frame_, "To turn it on again, hold", kLeft, 62, theme::kMuted);
   const String hold = "D1 or D2 for " + String(power::kHoldToStartMs / 1000) + " s.";
   drawRich(frame_, hold.c_str(), kLeft, 78, theme::kMuted);
-  drawRich(frame_, "Let go of the button now.", kLeft, 110, theme::kAccent);
+  const String countdown = "Off in " + String(offInS_) + " s";
+  drawRich(frame_, countdown.c_str(), kLeft, 110, theme::kAccent);
 }
 
 // Like an air alert, for a battery running low.

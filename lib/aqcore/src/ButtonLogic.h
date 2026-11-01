@@ -27,6 +27,9 @@ class ButtonLogic {
   bool pressed() const { return stable_; }
   // Ignore the rest of the current press, e.g. because it only woke the screen.
   void swallow() { swallowed_ = stable_; }
+  // The button is already down, and that press is to be ignored: e.g. the one
+  // still held after switching the monitor on.
+  void ignoreHeld() { raw_ = stable_ = swallowed_ = true; }
 
  private:
   bool raw_ = false;

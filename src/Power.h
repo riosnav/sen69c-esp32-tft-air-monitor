@@ -19,6 +19,8 @@ namespace power {
 constexpr uint32_t kCheckEveryMinutes = 5;
 // How long D1 or D2 must be held to turn the monitor on.
 constexpr uint32_t kHoldToStartMs = 2000;
+// How long the Power off screen counts down, so there's time to read it.
+constexpr uint32_t kOffCountdownS = 10;
 
 // First thing in setup(): after switching off, goes straight back to sleep
 // unless it's time to start.

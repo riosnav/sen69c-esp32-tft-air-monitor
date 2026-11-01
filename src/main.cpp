@@ -28,7 +28,6 @@ namespace {
 constexpr uint32_t kLogIntervalMs = 10000;
 // How long the screen says why, before switching off.
 constexpr uint32_t kEmptyMessageMs = 5000;
-constexpr uint32_t kOffMessageMs = 3000;
 // The sensor task may be busy for a while, e.g. heating the humidity sensor.
 constexpr uint32_t kSensorStopMs = 2000;
 
@@ -101,8 +100,11 @@ void logMeasurement(const SensorSnapshot& s) {
 void setup() {
   Serial.begin(115200);
   power::begin();  // after switching off for an empty battery, may sleep again
-  // Give a serial monitor a moment to attach, but never block standalone use.
-  for (uint32_t start = millis(); !Serial && millis() - start < 2000;) delay(10);
+  // Give a serial monitor a moment to attach, but never block standalone use,
+  // nor keep someone who just switched it on with D1 or D2 waiting.
+  if (esp_reset_reason() != ESP_RST_DEEPSLEEP) {
+    for (uint32_t start = millis(); !Serial && millis() - start < 2000;) delay(10);
+  }
   Serial.printf("\nSEN69C Air Monitor %s\n", FW_VERSION);
   Serial.printf("%s rev %u, flash %u KB, PSRAM %u KB, reset reason %d\n", ESP.getChipModel(),
                 ESP.getChipRevision(), ESP.getFlashChipSize() / 1024, ESP.getPsramSize() / 1024,
@@ -171,7 +173,13 @@ void loop() {
   }
   if (powerOff) {
     sensor.powerDown(kSensorStopMs);
-    delay(kOffMessageMs);
+    for (uint32_t left = power::kOffCountdownS; left > 0; --left) {
+      {
+        AppLock lock;
+        ui.showPoweringOff(left);
+      }
+      delay(1000);
+    }
     power::powerOff();
   }
   sys::loop(now);

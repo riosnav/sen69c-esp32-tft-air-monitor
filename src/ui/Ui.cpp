@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <iterator>
 
+#include "Power.h"
+
 namespace {
 
 // D0 doubles as BOOT and is pulled up; D1/D2 are pulled down (so they can wake
@@ -49,6 +51,8 @@ void Ui::begin(SensorService& sensor, Settings& settings, const aq::AirQuality& 
 
   for (size_t i = 0; i < 3; ++i) {
     pinMode(kButtonPins[i], kPressedLevel[i] == LOW ? INPUT_PULLUP : INPUT_PULLDOWN);
+    // E.g. D1 still held from switching on: not a long press for the menu.
+    if (digitalRead(kButtonPins[i]) == kPressedLevel[i]) buttons_[i].ignoreHeld();
   }
   tft_.init();
   tft_.setRotation(1);  // landscape, buttons on the left (D0 top, D2 bottom)
@@ -96,6 +100,11 @@ void Ui::showBatteryEmpty() {
   batteryEmpty_ = true;
   dimmed_ = false;
   applyBacklight();
+  draw(millis());
+}
+
+void Ui::showPoweringOff(uint32_t secondsLeft) {
+  offInS_ = secondsLeft;
   draw(millis());
 }
 
@@ -370,7 +379,8 @@ void Ui::execute(Item item) {
       ESP.restart();
       break;
     case Item::PowerOff:
-      poweringOff_ = true;  // the main loop switches off
+      poweringOff_ = true;  // the main loop counts down and switches off
+      offInS_ = power::kOffCountdownS;
       break;
     case Item::FactoryReset:
       settings::erase();

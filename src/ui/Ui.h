@@ -37,6 +37,8 @@ class Ui {
   void showBatteryEmpty();
   // Power off was chosen in the menu; the screen says how to turn it on again.
   bool powerOffRequested() const { return poweringOff_; }
+  // Counts down on that screen; the main loop switches off after it.
+  void showPoweringOff(uint32_t secondsLeft);
 
  private:
   enum class Mode : uint8_t { Pages, Menu, Edit, Confirm, Link };
@@ -172,6 +174,7 @@ class Ui {
   uint8_t batteryAcknowledged_ = 0;
   bool batteryEmpty_ = false;
   bool poweringOff_ = false;
+  uint32_t offInS_ = 0;  // the Power off countdown
 
   uint32_t lastInputMs_ = 0;
   bool dimmed_ = false;

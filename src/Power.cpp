@@ -123,10 +123,7 @@ void begin() {
     return;  // started as usual (power on, reset)
   }
   if (why == Off::ByUser) {
-    if (heldUntil(kHoldToStartMs)) {
-      waitForRelease();  // or the UI would take the press as its own
-      return;
-    }
+    if (heldUntil(kHoldToStartMs)) return;  // the UI ignores the rest of the press
     sleep(Off::ByUser);  // a brief press, e.g. in a bag
   }
   float volts = NAN;

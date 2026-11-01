@@ -165,6 +165,18 @@ static void test_button_swallow_suppresses_rest_of_press() {
   TEST_ASSERT_EQUAL(ButtonEvent::Click, b.update(false, t += 30));
 }
 
+static void test_button_ignore_held_until_released() {
+  ButtonLogic b;
+  uint32_t t = 0;
+  b.ignoreHeld();
+  TEST_ASSERT_EQUAL(ButtonEvent::None, b.update(true, t += 30));
+  TEST_ASSERT_EQUAL(ButtonEvent::None, b.update(true, t += 2000));  // no long press
+  b.update(false, t += 10);
+  TEST_ASSERT_EQUAL(ButtonEvent::None, b.update(false, t += 30));  // no click
+  b.update(true, t += 100);
+  TEST_ASSERT_EQUAL(ButtonEvent::Press, b.update(true, t += 30));
+}
+
 static void test_comfort_values() {
   TEST_ASSERT_FLOAT_WITHIN(0.1f, 13.9f, dewPoint(25, 50));
   TEST_ASSERT_FLOAT_WITHIN(0.1f, 11.5f, absoluteHumidity(25, 50));
@@ -332,6 +344,7 @@ static int runTests() {
   RUN_TEST(test_history_averages_and_records_gaps);
   RUN_TEST(test_button_click_long_press_and_repeat);
   RUN_TEST(test_button_swallow_suppresses_rest_of_press);
+  RUN_TEST(test_button_ignore_held_until_released);
   RUN_TEST(test_comfort_values);
   RUN_TEST(test_wifi_choice_strongest_first_then_hidden);
   RUN_TEST(test_wifi_choice_ties_keep_saved_order);
