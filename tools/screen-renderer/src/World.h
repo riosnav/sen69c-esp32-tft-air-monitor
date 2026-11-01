@@ -71,7 +71,7 @@ struct World {
   uint32_t failedLogins = 0;  // wrong web passwords
 
   std::string hostname = "airmonitor-a1b2";
-  uint32_t historyMinutes = 24 * 60;  // how far back the trend pages reach
+  uint32_t historyMinutes = 7 * 24 * 60;  // how far back the trend pages reach
 };
 
 extern World world;

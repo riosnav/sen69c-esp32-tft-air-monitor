@@ -377,7 +377,7 @@ class Runner {
     if (command == "history") {
       const std::string what = lower(arg(1));
       if (n == 1 && what == "full") {
-        world.historyMinutes = 24 * 60;
+        world.historyMinutes = 7 * 24 * 60;
       } else if (n == 1 && what == "none") {
         world.historyMinutes = 0;
       } else if (n == 1 && parseDuration(what, ms)) {

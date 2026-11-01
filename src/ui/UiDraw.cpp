@@ -234,10 +234,9 @@ void Ui::draw(uint32_t nowMs) {
           drawComfort();
           break;
         case Page::TrendHour:
-          drawTrend(false);
-          break;
         case Page::TrendDay:
-          drawTrend(true);
+        case Page::TrendWeek:
+          drawTrend();
           break;
         case Page::Network:
           drawNetwork();
@@ -468,44 +467,53 @@ void Ui::drawComfort() {
   drawRich(frame_, verdict.text, kLeft, 130, theme::levelColor(verdict.level));
 }
 
-void Ui::drawTrend(bool day) {
+void Ui::drawTrend() {
+  using aq::MetricHistory;
   const Metric metric = kTrendMetrics[trendMetric_];
-  const String title = String(label(metric)) + (day ? "  last 24 h" : "  last hour");
-  drawTitle(title.c_str());
+  const bool hour = page_ == Page::TrendHour;
+  const bool week = page_ == Page::TrendWeek;
+  // Short enough to leave room for the Wi-Fi icon and the level.
+  const char* name = metric == Metric::Temperature ? "Temp." : label(metric);
+  const char* period = hour ? "  last hour" : week ? "  last 7 d" : "  last 24 h";
+  drawTitle((String(name) + period).c_str());
 
   // The plot sits 2 px inside the frame so the newest data isn't hidden by it.
   constexpr int y0 = 24;
   constexpr int y1 = 116;
   frame_.drawRect(kLeft, y0, kRight - kLeft + 1, y1 - y0 + 1, theme::kFaint);
-  if (day) {
-    drawChart(history_->coarse(metric), metric, kLeft + 2, y0 + 2, kRight - 2, y1 - 2);
+  if (hour) {
+    drawChart(history_->fine(metric), MetricHistory::Fine::capacity(), metric, kLeft + 2, y0 + 2,
+              kRight - 2, y1 - 2);
   } else {
-    drawChart(history_->fine(metric), metric, kLeft + 2, y0 + 2, kRight - 2, y1 - 2);
+    const size_t span = week ? MetricHistory::Coarse::capacity() : 24 * 60;
+    drawChart(history_->coarse(metric), span, metric, kLeft + 2, y0 + 2, kRight - 2, y1 - 2);
   }
   frame_.setFont(kSmall);
-  drawRich(frame_, day ? "-24 h" : "-1 h", kLeft, 129, theme::kMuted);
-  const char* middle = day ? "-12 h" : "-30 min";
+  drawRich(frame_, hour ? "-1 h" : week ? "-7 d" : "-24 h", kLeft, 129, theme::kMuted);
+  const char* middle = hour ? "-30 min" : week ? "-3.5 d" : "-12 h";
   drawRich(frame_, middle, (kLeft + kRight - richWidth(frame_, middle)) / 2, 129, theme::kMuted);
   drawRichRight(frame_, "now", kRight, 129, theme::kMuted);
 }
 
 template <typename Ring>
-void Ui::drawChart(const Ring& ring, Metric metric, int x0, int y0, int x1, int y1) {
-  // Average the samples that fall into each pixel column. The right edge is
-  // now; columns older than the oldest sample stay empty.
+void Ui::drawChart(const Ring& ring, size_t span, Metric metric, int x0, int y0, int x1, int y1) {
+  // The newest `span` samples, averaged over each pixel column (about 50 for
+  // the 7 days). The right edge is now; columns older than the oldest sample
+  // stay empty.
   const int width = x1 - x0 + 1;
-  const size_t capacity = Ring::capacity();
-  const size_t missing = capacity - ring.size();
+  const size_t shown = std::min(span, ring.size());
+  const size_t missing = span - shown;
+  const size_t first = ring.size() - shown;
   float columns[240];
   float lo = INFINITY;
   float hi = -INFINITY;
   for (int c = 0; c < width; ++c) {
-    const size_t s0 = static_cast<size_t>(c) * capacity / width;
-    const size_t s1 = static_cast<size_t>(c + 1) * capacity / width;
+    const size_t s0 = static_cast<size_t>(c) * span / width;
+    const size_t s1 = static_cast<size_t>(c + 1) * span / width;
     double sum = 0;
     int n = 0;
     for (size_t s = std::max(s0, missing); s < s1; ++s) {
-      const float v = ring[s - missing];
+      const float v = ring[first + s - missing];
       if (std::isnan(v)) continue;
       sum += v;
       ++n;

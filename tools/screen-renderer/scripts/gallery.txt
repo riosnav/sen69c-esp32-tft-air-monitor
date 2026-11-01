@@ -14,10 +14,12 @@ page hour
 shot pages/5-trend-hour.png
 page day
 shot pages/6-trend-day.png
+page week
+shot pages/7-trend-week.png
 page wifi
-shot pages/7-wifi.png
+shot pages/8-wifi.png
 page device
-shot pages/8-device.png
+shot pages/9-device.png
 
 # More trends (D1 on a trend page picks the next value)
 page day
@@ -211,6 +213,11 @@ update confirm
 wait 121s
 shot update/6-timed-out.png
 update off
+
+# A week of history, after a week of running
+uptime 8d
+page week
+shot trends/week.png
 
 # Just switched on: some values not measured yet, then formaldehyde still
 # settling and little history

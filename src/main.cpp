@@ -44,12 +44,12 @@ MqttService mqtt;
 power::BatteryWatch battery;
 Ui ui;
 
-// The history is ~72 KB: keep it in PSRAM and leave internal RAM for Wi-Fi.
+// The history is ~420 KB, more than the whole internal RAM: it needs the PSRAM.
 aq::MetricHistory* createHistory() {
   void* memory = ps_malloc(sizeof(aq::MetricHistory));
   if (memory == nullptr) {
-    Serial.println("No PSRAM; history goes to internal RAM");
-    memory = malloc(sizeof(aq::MetricHistory));
+    Serial.println("Not enough PSRAM for the history");
+    abort();
   }
   return new (memory) aq::MetricHistory();
 }

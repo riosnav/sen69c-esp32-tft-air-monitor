@@ -92,7 +92,7 @@ footer { color: var(--muted); font-size: 12px; margin-top: 30px; }
   <div class="card">
     <div class="row">
       <select id="chart-metric" aria-label="Value shown"></select>
-      <span class="seg"><button type="button" data-range="hour" class="on">1 hour</button><button type="button" data-range="day">24 hours</button></span>
+      <span class="seg"><button type="button" data-range="hour" class="on">1 hour</button><button type="button" data-range="day">24 hours</button><button type="button" data-range="week">7 days</button></span>
       <label class="check small"><input type="checkbox" id="jump"> Jump here when a value is clicked</label>
       <label class="check small"><input type="checkbox" id="tolerance"> Show the sensor's tolerance (&plusmn;)</label>
     </div>
@@ -625,7 +625,7 @@ async function poll() {
     state = await request('/api/state');
     renderState();
     $('#offline').hidden = true;
-    const stale = Date.now() - chart.loadedAt > (chart.range === 'hour' ? 10000 : 60000);
+    const stale = Date.now() - chart.loadedAt > { hour: 10, day: 60, week: 300 }[chart.range] * 1000;
     if (stale) loadChart(); else drawChart();
   } catch (e) {
     $('#offline').hidden = false;
@@ -719,9 +719,13 @@ function drawChart() {
     g.stroke();
     g.fillText(v.toFixed(hi - lo < 10 ? 1 : 0), left - 6, yy);
   }
-  // Time axis: clock times at round intervals, in this browser's time zone.
-  const minutes = chart.range === 'hour' ? (width < 480 ? 15 : 10) : (width < 480 ? 6 : 3) * 60;
+  // Time axis: clock times at round intervals, or midnights for the week, in
+  // this browser's time zone.
+  const week = chart.range === 'week';
+  const narrow = width < 480;
+  const minutes = { hour: narrow ? 15 : 10, day: (narrow ? 6 : 3) * 60, week: (narrow ? 2 : 1) * 24 * 60 }[chart.range];
   const interval = minutes * 60000;
+  const timeText = (t, withDay) => new Date(t).toLocaleString([], withDay ? { weekday: 'short', hour: '2-digit', minute: '2-digit' } : { hour: '2-digit', minute: '2-digit' });
   const zone = new Date(end).getTimezoneOffset() * 60000;
   g.textAlign = 'center';
   g.textBaseline = 'top';
@@ -731,7 +735,7 @@ function drawChart() {
     g.moveTo(xx, top);
     g.lineTo(xx, bottom);
     g.stroke();
-    const label = new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const label = week ? new Date(t).toLocaleDateString([], { weekday: 'short', day: 'numeric' }) : timeText(t, false);
     const half = g.measureText(label).width / 2;
     g.fillText(label, Math.min(Math.max(xx, left + half), right - half), bottom + 6);
   }
@@ -817,7 +821,7 @@ function drawChart() {
   g.beginPath();
   g.arc(xi, yi, 4, 0, 2 * Math.PI);
   g.fill();
-  const when = new Date(timeOf(i)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const when = timeText(timeOf(i), week);
   const text = `${when}   ${f(values[i])}${tols[i] == null ? '' : ' ' + formatTolerance(tols[i])} ${unitOf(m)}`.trim();
   g.font = '600 13px system-ui, sans-serif';
   const w = g.measureText(text).width + 14;

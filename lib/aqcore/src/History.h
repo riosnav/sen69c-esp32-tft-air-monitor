@@ -3,6 +3,8 @@
 // Recent history of every metric for the trend graphs.
 #pragma once
 
+#include <algorithm>
+
 #include "Metrics.h"
 
 namespace aq {
@@ -46,15 +48,38 @@ class Averager {
   uint32_t count_ = 0;
 };
 
-// Every metric at two resolutions: 1 h of 10 s means and 24 h of 1 min means.
-// Periods without data are stored as NaN, which the graphs draw as gaps.
-// About 72 KB, so the firmware places it in PSRAM.
+// Means of `group` consecutive samples over the newest `span` samples of
+// `ring` (all of them if it has fewer), oldest first. The groups line up with
+// the newest sample, so only the oldest one can be short. Writes up to
+// span / group values (rounded up) to `out` and returns how many.
+template <size_t N>
+size_t groupMeans(const Ring<N>& ring, size_t span, size_t group, float* out) {
+  const size_t count = std::min(span, ring.size());
+  const size_t first = ring.size() - count;
+  size_t length = count % group == 0 ? group : count % group;
+  size_t written = 0;
+  size_t taken = 0;
+  Averager mean;
+  for (size_t i = 0; i < count; ++i) {
+    mean.add(ring[first + i]);
+    if (++taken == length) {
+      out[written++] = mean.take();
+      taken = 0;
+      length = group;
+    }
+  }
+  return written;
+}
+
+// Every metric at two resolutions: 1 h of 10 s means and 7 days of 1 min
+// means. Periods without data are stored as NaN, which the graphs draw as
+// gaps. About 420 KB, so the firmware places it in PSRAM.
 class MetricHistory {
  public:
   static constexpr uint32_t kFinePeriodMs = 10000;
   static constexpr uint32_t kCoarsePeriodMs = 60000;
   using Fine = Ring<360>;
-  using Coarse = Ring<1440>;
+  using Coarse = Ring<7 * 24 * 60>;
 
   // Call with each new measurement, or with nullptr just to let time pass.
   void update(const Measurement* m, uint32_t nowMs);

@@ -47,6 +47,7 @@ class Ui {
     Comfort,
     TrendHour,
     TrendDay,
+    TrendWeek,
     Network,
     Device,
     Count
@@ -107,9 +108,9 @@ class Ui {
   void drawOverview();
   void drawMetricRows(const aq::Metric* metrics, size_t count);
   void drawComfort();
-  void drawTrend(bool day);
+  void drawTrend();
   template <typename Ring>
-  void drawChart(const Ring& ring, aq::Metric metric, int x0, int y0, int x1, int y1);
+  void drawChart(const Ring& ring, size_t span, aq::Metric metric, int x0, int y0, int x1, int y1);
   void drawDevice(uint32_t nowMs);
   void drawNetwork();
   void drawSignal(int right, int baseline, int8_t rssi);

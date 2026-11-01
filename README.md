@@ -22,7 +22,7 @@ humidity, all in green](docs/screen.png)
 - Every value on the built-in 240×135 colour screen, with green / amber / red levels.
 - A pop-up alert (which also wakes the screen, and closes by itself after a minute) when a value leaves the
   healthy range; the board's small colour LED shows the overall air quality.
-- Trend graphs of the last hour and the last 24 hours for every value.
+- Trend graphs of the last hour, 24 hours and 7 days for every value.
 - A settings menu on the device, worked with its three buttons. Settings survive restarts and power cuts.
 - Wi-Fi setup from a phone, no reprogramming: scan the QR code on the screen and pick your network. Up to five
   networks are saved; the monitor joins the strongest one in range.
@@ -138,8 +138,8 @@ Small symbols next to each button show what it does on the current screen.
 | Wi-Fi setup screen | – | cancel, or done once connected | – |
 | Firmware update sent from the web page | **hold 5 s**: install · press: refuse | same | same |
 
-Pages: *Air quality* (overview), *Particles*, *Gases*, *Comfort*, the trend of the last hour, the trend of the
-last 24 hours, *Wi-Fi* and *Device*.
+Pages: *Air quality* (overview), *Particles*, *Gases*, *Comfort*, the trends of the last hour, the last 24 hours
+and the last 7 days, *Wi-Fi* and *Device*.
 D1 on a trend page shows the next value. On the Wi-Fi page it starts Wi-Fi setup (or turns Wi-Fi back on), or,
 once connected, shows a QR code that opens the web page on a phone. On the *Device* page it clears a sensor error:
 the sensor keeps reporting most errors until they are cleared, even once they are gone, so one that comes back is
@@ -372,7 +372,7 @@ the UI. The screenshot at the top of this README comes from it. Its README expla
 
 ### JSON API and MQTT topics
 
-The web page uses a small JSON API (`/api/state`, `/api/history?metric=co2&range=hour|day`, `/api/settings`,
+The web page uses a small JSON API (`/api/state`, `/api/history?metric=co2&range=hour|day|week`, `/api/settings`,
 ...), listed at the top of [src/net/Web.h](src/net/Web.h). Metric names: `pm1 pm25 pm4 pm10 co2 hcho voc nox
 temp rh`.
 

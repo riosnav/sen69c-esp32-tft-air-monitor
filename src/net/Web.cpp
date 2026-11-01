@@ -471,10 +471,25 @@ esp_err_t getHistory(httpd_req_t* req) {
   httpd_query_key_value(query, "range", range, sizeof range);
   Metric metric;
   if (!metricFromId(id, metric)) return badRequest(req, "Unknown metric");
-  const bool day = strcmp(range, "day") == 0;
-  const size_t capacity = day ? aq::MetricHistory::Coarse::capacity()
-                              : aq::MetricHistory::Fine::capacity();
-  const uint32_t step = (day ? aq::MetricHistory::kCoarsePeriodMs : aq::MetricHistory::kFinePeriodMs) / 1000;
+  // The hour in 10 s means, the day in 1 min means, and the week in 5 min
+  // means: plenty for a chart, and a fifth of the data.
+  using aq::MetricHistory;
+  static constexpr struct {
+    const char* id;
+    bool coarse;
+    size_t span;  // in samples of the ring
+    size_t group;
+  } kRanges[] = {
+      {"hour", false, MetricHistory::Fine::capacity(), 1},
+      {"day", true, 24 * 60, 1},
+      {"week", true, MetricHistory::Coarse::capacity(), 5},
+  };
+  const auto* r = std::find_if(std::begin(kRanges), std::end(kRanges),
+                               [&](const auto& candidate) { return strcmp(candidate.id, range) == 0; });
+  if (r == std::end(kRanges)) return badRequest(req, "Unknown range");
+  const size_t capacity = (r->span + r->group - 1) / r->group;
+  const uint32_t step =
+      (r->coarse ? MetricHistory::kCoarsePeriodMs : MetricHistory::kFinePeriodMs) / 1000 * r->group;
 
   // Copy under the lock, then send without holding it (the client may be slow).
   std::unique_ptr<float[]> values(new (std::nothrow) float[capacity]);
@@ -482,14 +497,10 @@ esp_err_t getHistory(httpd_req_t* req) {
   size_t count = 0;
   {
     AppLock lock;
-    auto copy = [&](const auto& ring) {
-      count = ring.size();
-      for (size_t i = 0; i < count; ++i) values[i] = ring[i];
-    };
-    if (day) {
-      copy(ctx.history->coarse(metric));
+    if (r->coarse) {
+      count = aq::groupMeans(ctx.history->coarse(metric), r->span, r->group, values.get());
     } else {
-      copy(ctx.history->fine(metric));
+      count = aq::groupMeans(ctx.history->fine(metric), r->span, r->group, values.get());
     }
   }
 

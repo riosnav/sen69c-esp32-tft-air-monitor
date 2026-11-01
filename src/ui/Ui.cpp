@@ -158,7 +158,7 @@ void Ui::onPageEvent(size_t button, aq::ButtonEvent event) {
     page_ = stepEnum(page_, -1, Page::Count);
   } else if (button == 2) {
     page_ = stepEnum(page_, +1, Page::Count);
-  } else if (page_ == Page::TrendHour || page_ == Page::TrendDay) {
+  } else if (page_ == Page::TrendHour || page_ == Page::TrendDay || page_ == Page::TrendWeek) {
     trendMetric_ = (trendMetric_ + 1) % kTrendMetrics.size();
   } else if (page_ == Page::Network) {
     onNetworkAction();

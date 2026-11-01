@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <iterator>
+#include <memory>
 #include <type_traits>
 #include <utility>
 
@@ -59,7 +60,7 @@ struct Inside {
   static constexpr std::pair<const char*, Page> kPages[] = {
       {"overview", Page::Overview}, {"particles", Page::Particles}, {"gases", Page::Gases},
       {"comfort", Page::Comfort},   {"hour", Page::TrendHour},      {"day", Page::TrendDay},
-      {"wifi", Page::Network},      {"device", Page::Device},
+      {"week", Page::TrendWeek},    {"wifi", Page::Network},        {"device", Page::Device},
   };
   static_assert(std::size(kPages) == static_cast<size_t>(Page::Count), "a name for every page");
 
@@ -165,8 +166,9 @@ struct Inside {
   }
 
   static std::string showTrend(Simulator& sim, Ui& ui, Metric metric) {
-    const bool day = ui.*PageMember == Page::TrendDay;
-    if (std::string e = goToPage(sim, ui, day ? "day" : "hour"); !e.empty()) return e;
+    const Page page = ui.*PageMember;
+    const char* trend = page == Page::TrendDay ? "day" : page == Page::TrendWeek ? "week" : "hour";
+    if (std::string e = goToPage(sim, ui, trend); !e.empty()) return e;
     const auto& metrics = *TrendMetrics;
     for (size_t i = 0; i <= metrics.size(); ++i) {
       if (metrics[ui.*TrendMember] == metric) return "";
@@ -293,7 +295,9 @@ void Simulator::hold(int button, uint32_t ms) {
 }
 
 void Simulator::fillHistory() {
-  *history_ = aq::MetricHistory();
+  // In place: the UI keeps a reference to it, and it is too big for the stack.
+  std::destroy_at(history_.get());
+  std::construct_at(history_.get());
   const uint32_t span =
       static_cast<uint32_t>(std::min<uint64_t>(world.historyMinutes * 60000ULL, world.nowMs));
   aq::Measurement m;

@@ -87,6 +87,28 @@ static void test_ring_keeps_newest_in_order() {
   TEST_ASSERT_EQUAL_FLOAT(5, r[2]);
 }
 
+static void test_group_means_line_up_with_the_newest() {
+  Ring<8> r;
+  for (int i = 1; i <= 7; ++i) r.push(static_cast<float>(i));
+  float out[8];
+  // The newest 6 in threes: (2 3 4) (5 6 7).
+  TEST_ASSERT_EQUAL(2, groupMeans(r, 6, 3, out));
+  TEST_ASSERT_EQUAL_FLOAT(3, out[0]);
+  TEST_ASSERT_EQUAL_FLOAT(6, out[1]);
+  // More than there is: only the oldest group is short, (1) (2 3 4) (5 6 7).
+  TEST_ASSERT_EQUAL(3, groupMeans(r, 100, 3, out));
+  TEST_ASSERT_EQUAL_FLOAT(1, out[0]);
+  TEST_ASSERT_EQUAL_FLOAT(6, out[2]);
+  // Gaps don't count; a group of nothing but gaps stays one.
+  r.push(NAN);
+  r.push(NAN);  // 2 3 4 5 6 7 - -
+  TEST_ASSERT_EQUAL(4, groupMeans(r, 8, 2, out));
+  TEST_ASSERT_EQUAL_FLOAT(2.5f, out[0]);
+  TEST_ASSERT_TRUE(std::isnan(out[3]));
+  TEST_ASSERT_EQUAL(1, groupMeans(r, 3, 3, out));
+  TEST_ASSERT_EQUAL_FLOAT(7, out[0]);
+}
+
 static void test_history_averages_and_records_gaps() {
   auto h = std::make_unique<MetricHistory>();
   Measurement m;
@@ -306,6 +328,7 @@ static int runTests() {
   RUN_TEST(test_level_two_sided);
   RUN_TEST(test_overall_is_worst_and_ties_follow_priority);
   RUN_TEST(test_ring_keeps_newest_in_order);
+  RUN_TEST(test_group_means_line_up_with_the_newest);
   RUN_TEST(test_history_averages_and_records_gaps);
   RUN_TEST(test_button_click_long_press_and_repeat);
   RUN_TEST(test_button_swallow_suppresses_rest_of_press);
