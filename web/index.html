@@ -119,6 +119,8 @@ footer { color: var(--muted); font-size: 12px; margin-top: 30px; }
           <option value="0">Never</option><option value="30">30 s</option><option value="60">1 min</option>
           <option value="120">2 min</option><option value="300">5 min</option><option value="900">15 min</option>
         </select></label>
+      <label>Then
+        <select name="idleScreen"><option value="dim">dim it</option><option value="off">switch it off (the sensor keeps measuring)</option></select></label>
       <label>Temperature unit
         <select name="units"><option value="C">&deg;C</option><option value="F">&deg;F</option></select></label>
       <label>Status LED
@@ -879,6 +881,7 @@ async function loadSettings() {
   f.brightness.value = s.brightness;
   $('#brightness-out').textContent = s.brightness + ' %';
   f.dimAfter.value = s.dimAfter;
+  f.idleScreen.value = s.idleScreen;
   f.units.value = s.fahrenheit ? 'F' : 'C';
   f.led.value = s.led;
   f.tempOffset.value = s.tempOffset;
@@ -902,6 +905,7 @@ $('#settings').addEventListener('submit', async (e) => {
     name: f.deviceName.value.trim(),
     brightness: Number(f.brightness.value),
     dimAfter: Number(f.dimAfter.value),
+    idleScreen: f.idleScreen.value,
     fahrenheit: f.units.value === 'F',
     led: f.led.value,
     tempOffset: Number(f.tempOffset.value),

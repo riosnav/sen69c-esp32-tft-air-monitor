@@ -598,6 +598,7 @@ void addSettings(cJSON* r, const Settings& s) {
   cJSON_AddStringToObject(r, "name", s.name);
   cJSON_AddNumberToObject(r, "brightness", s.brightness);
   cJSON_AddNumberToObject(r, "dimAfter", s.dimAfterS);
+  cJSON_AddStringToObject(r, "idleScreen", s.screenOffWhenIdle ? "off" : "dim");
   cJSON_AddBoolToObject(r, "fahrenheit", s.fahrenheit);
   cJSON_AddStringToObject(r, "led", ledId(s.led));
   addNumber(r, "tempOffset", s.tempOffsetC, 1);
@@ -644,6 +645,11 @@ const char* parseSettings(const cJSON* json, Settings& s) {
       return "Unsupported dimming delay";
     }
     s.dimAfterS = static_cast<uint16_t>(f->valueint);
+  }
+  if ((f = field(json, "idleScreen"))) {
+    const char* idle = cJSON_IsString(f) ? f->valuestring : "";
+    if (strcmp(idle, "dim") != 0 && strcmp(idle, "off") != 0) return "Idle screen: dim or off";
+    s.screenOffWhenIdle = strcmp(idle, "off") == 0;
   }
   if ((f = field(json, "fahrenheit"))) {
     if (!cJSON_IsBool(f)) return "Units: true or false";

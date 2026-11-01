@@ -65,6 +65,7 @@ Readings
 Settings
   setting brightness|dim-after|temp-offset|altitude NUMBER   (dim-after in s)
   setting units c|f
+  setting idle-screen dim|off
   setting led off|dim|bright
   setting co2-self-calibration|battery|wifi on|off
   setting web-password|name TEXT
@@ -408,6 +409,8 @@ class Runner {
         s.brightness = static_cast<uint8_t>(number);
       } else if (name == "dim-after" && isNumber && number >= 0 && number < 65536) {
         s.dimAfterS = static_cast<uint16_t>(number);
+      } else if (name == "idle-screen" && (value == "dim" || value == "off")) {
+        s.screenOffWhenIdle = value == "off";
       } else if (name == "units" && (value == "c" || value == "f")) {
         s.fahrenheit = value == "f";
       } else if (name == "led" && (value == "off" || value == "dim" || value == "bright")) {

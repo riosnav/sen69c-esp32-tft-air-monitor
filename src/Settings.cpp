@@ -20,6 +20,7 @@ Settings load() {
   if (p.begin(kNamespace, true)) {
     s.brightness = p.getUChar("bright", s.brightness);
     s.dimAfterS = p.getUShort("dim", s.dimAfterS);
+    s.screenOffWhenIdle = p.getBool("idleOff", s.screenOffWhenIdle);
     s.fahrenheit = p.getBool("degF", s.fahrenheit);
     s.led = static_cast<LedMode>(p.getUChar("led", static_cast<uint8_t>(s.led)));
     s.tempOffsetC = p.getFloat("tOffset", s.tempOffsetC);
@@ -50,6 +51,7 @@ void save(const Settings& s) {
   if (!p.begin(kNamespace, false)) return;
   p.putUChar("bright", s.brightness);
   p.putUShort("dim", s.dimAfterS);
+  p.putBool("idleOff", s.screenOffWhenIdle);
   p.putBool("degF", s.fahrenheit);
   p.putUChar("led", static_cast<uint8_t>(s.led));
   p.putFloat("tOffset", s.tempOffsetC);

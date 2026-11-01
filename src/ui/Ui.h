@@ -56,6 +56,7 @@ class Ui {
   enum class Item : uint8_t {
     Brightness,
     DimAfter,
+    IdleScreen,
     Units,
     Led,
     Wifi,
@@ -97,6 +98,7 @@ class Ui {
   void dismissAlert();
   bool alertShowing() const { return alertVisible_ || batteryAlert_ != 0; }
   void updateBacklight(uint32_t nowMs);
+  void applyBacklight();
   void showToast(const char* text, uint32_t nowMs);
   bool warmingUp() const;
 
@@ -173,6 +175,7 @@ class Ui {
 
   uint32_t lastInputMs_ = 0;
   bool dimmed_ = false;
+  bool screenOff_ = false;  // idle, with the screen switched off
   uint32_t lastDrawMs_ = 0;
   bool dirty_ = true;
 

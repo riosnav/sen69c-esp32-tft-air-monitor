@@ -38,7 +38,7 @@ const lgfx::IFont* const kHuge = &fonts::DejaVu40;
 
 // In Ui::Item order.
 constexpr const char* kItemLabels[] = {
-    "Brightness",   "Dim after",    "Units",          "Status LED",
+    "Brightness",   "Dim after",    "Idle screen",    "Units",          "Status LED",
     "Wi-Fi",        "Set up Wi-Fi", "Forget Wi-Fi",
     "Temp. offset", "Altitude",     "CO_2 self-calibration", "Calibrate CO_2",
     "Reset CO_2 calibration", "Clean fan", "Heat humidity sensor", "Restart VOC learning",
@@ -1124,6 +1124,8 @@ String Ui::itemValue(Item item) const {
     case Item::DimAfter:
       if (s.dimAfterS == 0) return "Never";
       return s.dimAfterS < 60 ? String(s.dimAfterS) + " s" : String(s.dimAfterS / 60) + " min";
+    case Item::IdleScreen:
+      return s.screenOffWhenIdle ? "Off" : "Dim";
     case Item::Units:
       return s.fahrenheit ? "~dF" : "~dC";
     case Item::Led:

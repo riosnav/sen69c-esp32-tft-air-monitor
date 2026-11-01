@@ -195,7 +195,7 @@ in memory and start over after a restart or update (the web page can download th
 
 | Setting | What it does |
 |---|---|
-| Brightness, Dim after, Units, Status LED | Screen brightness, when the screen dims, °C or °F, and how bright the colour LED is (or off). |
+| Brightness, Dim after, Idle screen, Units, Status LED | Screen brightness; when the screen dims, and whether it dims or switches off then (the sensor keeps measuring, and a button press or an alert wakes it); °C or °F; and how bright the colour LED is (or off). |
 | Wi-Fi | Turns Wi-Fi on or off. |
 | Set up Wi-Fi | Adds a network from a phone (see below). |
 | Forget Wi-Fi | Deletes every saved network. |

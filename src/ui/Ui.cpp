@@ -62,7 +62,7 @@ void Ui::update(const SensorSnapshot& snapshot, uint32_t nowMs) {
   snapshot_ = snapshot;
   if (settingsChanged_) {
     settingsChanged_ = false;
-    if (!dimmed_) tft_.setBrightness(backlight(settings_->brightness));
+    applyBacklight();
     commitSettings();
     dirty_ = true;
   }
@@ -95,7 +95,7 @@ void Ui::update(const SensorSnapshot& snapshot, uint32_t nowMs) {
 void Ui::showBatteryEmpty() {
   batteryEmpty_ = true;
   dimmed_ = false;
-  tft_.setBrightness(backlight(settings_->brightness));
+  applyBacklight();
   draw(millis());
 }
 
@@ -269,6 +269,7 @@ void Ui::select(Item item) {
       editRepeats_ = 0;
       break;
     case Item::DimAfter:
+    case Item::IdleScreen:
     case Item::Units:
     case Item::Led:
     case Item::Wifi:
@@ -314,6 +315,9 @@ void Ui::adjust(Item item, int direction) {
       s.dimAfterS = kDimOptionsS[(i + n + direction) % n];
       break;
     }
+    case Item::IdleScreen:
+      s.screenOffWhenIdle = !s.screenOffWhenIdle;
+      break;
     case Item::Units:
       s.fahrenheit = !s.fahrenheit;
       break;
@@ -443,7 +447,23 @@ void Ui::updateBacklight(uint32_t nowMs) {
                    !alertShowing() && nowMs - lastInputMs_ >= settings_->dimAfterS * 1000UL;
   if (dim == dimmed_) return;
   dimmed_ = dim;
-  tft_.setBrightness(dim ? kDimmedBrightness : backlight(settings_->brightness));
+  applyBacklight();
+}
+
+// Full brightness, dimmed, or (idle, if so set) the screen switched off. Only
+// the backlight and the display chip sleep: the sensor shares the screen's
+// power, which stays on.
+void Ui::applyBacklight() {
+  const bool off = dimmed_ && settings_->screenOffWhenIdle;
+  if (off != screenOff_) {
+    screenOff_ = off;
+    if (off) {
+      tft_.sleep();
+    } else {
+      tft_.wakeup();
+    }
+  }
+  if (!off) tft_.setBrightness(dimmed_ ? kDimmedBrightness : backlight(settings_->brightness));
 }
 
 void Ui::showToast(const char* text, uint32_t nowMs) {

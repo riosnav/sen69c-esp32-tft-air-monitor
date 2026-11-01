@@ -13,6 +13,7 @@ constexpr uint16_t kDimOptionsS[] = {0, 30, 60, 120, 300, 900};
 struct Settings {
   uint8_t brightness = 60;  // backlight, %
   uint16_t dimAfterS = 120;  // dim the screen after this long without input; 0 = never
+  bool screenOffWhenIdle = false;  // switch the screen off then, instead of dimming it
   bool fahrenheit = false;
   LedMode led = LedMode::Dim;
   float tempOffsetC = 0;  // added to the measured temperature (corrects self-heating)

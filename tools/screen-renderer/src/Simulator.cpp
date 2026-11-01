@@ -67,6 +67,7 @@ struct Inside {
   static constexpr std::pair<const char*, Item> kItems[] = {
       {"brightness", Item::Brightness},
       {"dim-after", Item::DimAfter},
+      {"idle-screen", Item::IdleScreen},
       {"units", Item::Units},
       {"led", Item::Led},
       {"wifi", Item::Wifi},
