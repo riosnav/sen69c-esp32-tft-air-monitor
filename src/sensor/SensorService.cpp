@@ -36,8 +36,12 @@ constexpr uint16_t kGaugeHibernateDefault = 0x8030;
 // Raw values the SEN69C returns while a measurement isn't available yet.
 constexpr uint16_t kUnknownU16 = 0xFFFF;
 constexpr int16_t kUnknownI16 = 0x7FFF;
-// Stopping during the first 24 s of CO2 conditioning causes a CO2 error.
-constexpr uint32_t kCo2ConditioningMs = 24000;
+// Stopping too soon after a start upsets the sensor. In the first 24 s it
+// causes a CO2 error. And the VOC and NOx algorithms only take their starting
+// point after about 45 s of measuring (they show "--" until then): stopped
+// earlier, they take it from the unsettled readings after the restart and
+// report nonsense (NOx near 500, VOC 1) until they have relearned.
+constexpr uint32_t kMinRunMs = 60000;
 constexpr uint32_t kFanCleaningMs = 10000;
 // The humidity sensor's heater runs for 1 s. Firmware older than 9.0 is busy
 // for 1.3 s after the command; newer firmware reports when it's done. The
@@ -254,7 +258,7 @@ bool SensorService::startMeasurement(bool resumeIfRunning) {
 
 void SensorService::stopMeasurement() {
   uint32_t running = millis() - startedMs_;
-  if (running < kCo2ConditioningMs) vTaskDelay(pdMS_TO_TICKS(kCo2ConditioningMs - running));
+  if (running < kMinRunMs) vTaskDelay(pdMS_TO_TICKS(kMinRunMs - running));
   sen_.stopMeasurement();  // waits the required 1.4 s itself
 }
 
