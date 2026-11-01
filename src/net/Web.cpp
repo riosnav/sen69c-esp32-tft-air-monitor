@@ -7,6 +7,7 @@
 #include <LoginGuard.h>
 #include <cJSON.h>
 #include <esp_http_server.h>
+#include <esp_system.h>
 #include <lwip/sockets.h>
 #include <mbedtls/base64.h>
 
@@ -130,6 +131,30 @@ const char* otaStateId(OtaState state) {
       return "failed";
     default:
       return "idle";
+  }
+}
+
+// Why the monitor last started, which tells a crash from a power cut.
+const char* resetReasonId(esp_reset_reason_t reason) {
+  switch (reason) {
+    case ESP_RST_POWERON:
+      return "power-on";  // also the Reset button
+    case ESP_RST_SW:
+      return "restart";  // the menu, the web page, an update
+    case ESP_RST_PANIC:
+      return "crash";
+    case ESP_RST_INT_WDT:
+    case ESP_RST_TASK_WDT:
+    case ESP_RST_WDT:
+      return "watchdog";
+    case ESP_RST_BROWNOUT:
+      return "brownout";
+    case ESP_RST_DEEPSLEEP:
+      return "wake";  // after Power off or an empty battery
+    case ESP_RST_USB:
+      return "usb";  // flashed over USB
+    default:
+      return "other";
   }
 }
 
@@ -379,6 +404,7 @@ esp_err_t getState(httpd_req_t* req) {
     cJSON_AddStringToObject(r, "host", device::hostname());
     cJSON_AddStringToObject(r, "version", FW_VERSION);
     cJSON_AddNumberToObject(r, "uptime", now / 1000);
+    cJSON_AddStringToObject(r, "resetReason", resetReasonId(esp_reset_reason()));
     cJSON_AddStringToObject(r, "units", ctx.settings->fahrenheit ? "F" : "C");
     cJSON_AddStringToObject(r, "overall", levelId(air.overall()));
 

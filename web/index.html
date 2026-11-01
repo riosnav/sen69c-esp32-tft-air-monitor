@@ -422,6 +422,17 @@ function statusText(value) {
   return names.length ? `error: ${names.join(', ')}` : `device status 0x${value.toString(16)}`;
 }
 
+// Why the monitor last started: tells a restart on its own from a power cut.
+const RESET_REASONS = {
+  'power-on': 'Power on (plugged in, or the Reset button)',
+  restart: 'Restart (menu, web page or update)',
+  crash: 'Crash',
+  watchdog: 'Watchdog (the firmware hung)',
+  brownout: 'Power dip (brownout)',
+  wake: 'Woke up (after Power off or an empty battery)',
+  usb: 'Flashed over USB',
+};
+
 function duration(seconds) {
   const minutes = Math.floor(seconds / 60), hours = Math.floor(minutes / 60), days = Math.floor(hours / 24);
   if (minutes < 1) return 'less than a minute';
@@ -594,6 +605,7 @@ function renderState() {
   $('#mqtt-status').textContent = `Status: ${mqttText(s.mqtt)}.`;
   rows.push(['Address', `${s.host}.local`]);
   rows.push(['Firmware', `v${s.version}, running for ${duration(s.uptime)}`]);
+  rows.push(['Last start', RESET_REASONS[s.resetReason] || 'Other']);
   if (s.login && s.login.failed) {
     const locked = s.login.wait ? `; passwords refused for ${duration(s.login.wait)}` : '';
     rows.push(['Web password', `${s.login.failed} wrong since the monitor started${locked}`]);

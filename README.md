@@ -261,6 +261,9 @@ once someone holds a button on the monitor itself, so even a stolen password isn
 ![The web page: a card per value with its accuracy, and a trend chart of the last hour with the sensor's
 tolerance as a shaded band](docs/web-page.png)
 
+Its *Device* section also says why the monitor last started: plugged in, restarted from the menu, the web page or an
+update, or on its own after a crash, a hang (watchdog) or a power dip.
+
 The web page is served by the monitor itself, so it also works on networks without Home Assistant, e.g. when you
 take the monitor elsewhere.
 
