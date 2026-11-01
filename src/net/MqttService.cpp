@@ -24,6 +24,9 @@ constexpr uint32_t kStartRetryMs = 60000;  // if the client couldn't even be cre
 constexpr int kKeepaliveS = 60;
 // Also bounds how long stopping the client can take while it's connecting.
 constexpr int kNetworkTimeoutMs = 5000;
+// Wait before trying again after losing the broker, e.g. when Wi-Fi rejoins
+// (the client's default of 10 s kept Home Assistant waiting 15 s).
+constexpr int kReconnectMs = 3000;
 constexpr int kOutBufferBytes = 8192;  // holds the ~4.2 KB discovery message
 constexpr const char* kDiscoveryPrefix = "homeassistant";
 
@@ -186,6 +189,7 @@ void MqttService::start() {
   config.session.last_will.qos = 1;
   config.session.last_will.retain = 1;
   config.network.timeout_ms = kNetworkTimeoutMs;
+  config.network.reconnect_timeout_ms = kReconnectMs;
   config.buffer.out_size = kOutBufferBytes;
 
   connected_ = false;
