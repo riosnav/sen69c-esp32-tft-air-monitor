@@ -829,12 +829,14 @@ void Ui::drawLink() {
   drawPlain(frame_, "closes this.", kLeft, 124, theme::kMuted, width);
 }
 
+// An update arriving from the web page, stored beside the running firmware
+// until it is confirmed; then installing.
 void Ui::drawUpdate() {
   const bool done = ota_->state() == OtaState::Accepted;
   const int percent = done ? 100 : ota_->percent();
   constexpr int kWidth = kRight - kLeft;
   frame_.setFont(kMedium);
-  drawRich(frame_, "Updating firmware", kLeft, 40, theme::kText);
+  drawRich(frame_, done ? "Installing update" : "Receiving update", kLeft, 40, theme::kText);
   frame_.drawRect(kLeft, 56, kWidth, 14, theme::kMuted);
   frame_.fillRect(kLeft + 2, 58, (kWidth - 4) * percent / 100, 10,
                   done ? theme::kGood : theme::kAccent);
@@ -844,7 +846,7 @@ void Ui::drawUpdate() {
   } else {
     drawRich(frame_, (String(percent) + " %").c_str(), kLeft, 92, theme::kMuted);
   }
-  drawRich(frame_, "Keep the power on", kLeft, 120, theme::kMuted);
+  drawRich(frame_, done ? "Keep the power on" : "Asks before installing", kLeft, 120, theme::kMuted);
 }
 
 // An uploaded update, waiting for a yes on the monitor itself.
