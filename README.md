@@ -150,14 +150,20 @@ The screen dims after 2 minutes without use (changeable); when it is dimmed, the
 
 | Value | Fair (amber) | Poor (red) | Basis |
 |---|---|---|---|
-| CO₂ | 1000 ppm | 1500 ppm | Health Canada indoor guideline (24-hour average) and German Federal Environment Agency / UK school ventilation guidance BB101 (daily average) |
-| PM2.5 | 15 µg/m³ | 35 µg/m³ | WHO 2021 24-hour guideline / US EPA 24-hour standard |
-| PM10 | 45 µg/m³ | 150 µg/m³ | WHO 2021 24-hour guideline / US EPA 24-hour standard |
-| Formaldehyde | 40 ppb | 80 ppb | ~WELL building standard / WHO 30-minute guideline (0.1 mg/m³) |
+| CO₂ | 950 ppm | 2500 ppm | UNE 171330:2024: IDA 2, 500 ppm above outdoor air (taken as 450 ppm) / maximum. Germany's Federal Environment Agency: harmless below 1000 ppm, unacceptable above 2000 ppm |
+| PM2.5 | 15 µg/m³ | 50 µg/m³ | UNE 171330:2024: IDA 2, the same as the WHO 2021 24-hour guideline / maximum. EU outdoor limit: 25 µg/m³ daily average |
+| PM10 | 45 µg/m³ | 150 µg/m³ | EU daily limit from 2030 (Directive 2024/2881), the same as the WHO 2021 guideline / WHO 24-hour interim target |
+| Formaldehyde | 40 ppb | 80 ppb | UNE 171330:2024: 50 µg/m³ / WHO Europe 30-minute guideline (0.1 mg/m³), also Germany's indoor guide value |
 | VOC index | 150 | 250 | Sensirion index: 100 is the sensor's learned typical air |
 | NOₓ index | 20 | 150 | Sensirion index: 1 is the sensor's learned typical air |
-| Temperature | below 18 or above 26 °C | below 16 or above 30 °C | Comfort range |
-| Humidity | below 30 or above 60 % | below 20 or above 70 % | Comfort range; above 70 % mould risk |
+| Temperature | below 18 or above 26 °C | below 17 or above 30 °C | EN 16798-1 for homes: at least 18 °C (as the WHO advises), at most 26 °C / UNE 171330:2024 limit; 30 °C allows for homes without air conditioning |
+| Humidity | below 30 or above 60 % | below 20 or above 70 % | UNE 171330:2024: winter range (40–70 % in summer) / its 70 % limit, above which mould grows; below 20 % the air is very dry |
+
+UNE 171330:2024 is Spain's standard for indoor air quality inspections. A building passes when most readings are
+below its *acceptable* values and none is above its *maximum*, which is what Fair and Poor mean here. IDA 2 is its
+category for offices and classrooms, the closest to a home. Its values are for single readings, like the monitor's;
+the EU and WHO values are mostly 24-hour averages. The monitor has no clock, so it can't follow the standard's
+seasonal temperature and humidity ranges.
 
 PM1 and PM4 have no limits and are shown for information. A level only drops back once the value is a little
 inside the limit again, so readings near a limit don't flicker. The overall level is the worst of them.

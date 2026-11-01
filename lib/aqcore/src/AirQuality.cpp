@@ -47,14 +47,16 @@ const Thresholds& defaultThresholds(Metric m) {
       t.alarmHigh = alarm;
       t.hysteresis = hysteresis;
     };
-    high(Metric::Pm25, 15, 35, 2);     // ug/m3: WHO 24 h guideline / US EPA 24 h standard
-    high(Metric::Pm10, 45, 150, 5);    // ug/m3: WHO 24 h guideline / US EPA 24 h standard
-    high(Metric::Co2, 1000, 1500, 50);  // ppm: ventilation guidance
-    high(Metric::Hcho, 40, 80, 5);     // ppb: ~WELL limit / WHO 30 min guideline
+    // UNE 171330:2024 is Spain's indoor air standard: its "acceptable" value
+    // for IDA 2 (offices, classrooms) gives the warning, its maximum the alarm.
+    high(Metric::Pm25, 15, 50, 2);     // ug/m3: UNE IDA 2 / maximum
+    high(Metric::Pm10, 45, 150, 5);    // ug/m3: EU 24 h limit (= WHO) / WHO interim target
+    high(Metric::Co2, 950, 2500, 50);  // ppm: UNE IDA 2 (~450 outdoors + 500) / maximum
+    high(Metric::Hcho, 40, 80, 5);     // ppb: UNE (50 ug/m3) / WHO 30 min guideline
     high(Metric::Voc, 150, 250, 10);   // Sensirion VOC index, 100 = typical
     high(Metric::Nox, 20, 150, 5);     // Sensirion NOx index, 1 = typical
-    d[idx(Metric::Temperature)] = {26, 30, 18, 16, 0.5f};  // degC comfort range
-    d[idx(Metric::Humidity)] = {60, 70, 30, 20, 2};        // %RH; above 70 mould risk
+    d[idx(Metric::Temperature)] = {26, 30, 18, 17, 0.5f};  // degC: EN 16798-1 homes; UNE 17
+    d[idx(Metric::Humidity)] = {60, 70, 30, 20, 2};        // %RH: UNE winter range; UNE 70
     return d;
   }();
   return kDefaults[idx(m)];

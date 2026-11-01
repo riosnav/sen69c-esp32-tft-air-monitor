@@ -84,13 +84,13 @@ Scale scaleOf(Metric m) {
   switch (m) {
     case Metric::Pm1:
     case Metric::Pm25:
-      return {0, 50, 5};
+      return {0, 75, 5};
     case Metric::Pm4:
       return {0, 100, 5};
     case Metric::Pm10:
       return {0, 200, 5};
     case Metric::Co2:
-      return {400, 2000, 100};
+      return {400, 3200, 100};
     case Metric::Hcho:
       return {0, 120, 10};
     case Metric::Voc:

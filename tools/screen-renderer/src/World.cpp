@@ -28,7 +28,7 @@ bool World::setAir(const std::string& preset) {
   } kPresets[] = {
       {"good", {2.1f, 3.4f, 4.1f, 4.6f, 612, 11.2f, 98, 1, 22.4f, 46}},
       {"fair", {9.8f, 17.6f, 19.9f, 21.3f, 1180, 23.5f, 162, 2, 23.6f, 62}},
-      {"poor", {24.7f, 41.2f, 46.8f, 52.3f, 1720, 46.1f, 268, 6, 26.8f, 72}},
+      {"poor", {33.8f, 56.4f, 64.1f, 71.6f, 2680, 46.1f, 268, 6, 26.8f, 72}},
       {"warm-up", {2.3f, 3.6f, 4.2f, 4.7f, NAN, NAN, NAN, NAN, 22.1f, 47}},
   };
   for (const auto& p : kPresets) {

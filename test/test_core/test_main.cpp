@@ -25,17 +25,17 @@ static void test_level_unknown_for_nan() {
 }
 
 static void test_level_high_side_with_hysteresis() {
-  const Thresholds& co2 = defaultThresholds(Metric::Co2);  // 1000 / 1500, hysteresis 50
-  TEST_ASSERT_EQUAL(Level::Good, evaluate(999, co2, Level::Good));
-  TEST_ASSERT_EQUAL(Level::Warning, evaluate(1000, co2, Level::Good));
-  TEST_ASSERT_EQUAL(Level::Alarm, evaluate(1500, co2, Level::Warning));
+  const Thresholds& co2 = defaultThresholds(Metric::Co2);  // 950 / 2500, hysteresis 50
+  TEST_ASSERT_EQUAL(Level::Good, evaluate(949, co2, Level::Good));
+  TEST_ASSERT_EQUAL(Level::Warning, evaluate(950, co2, Level::Good));
+  TEST_ASSERT_EQUAL(Level::Alarm, evaluate(2500, co2, Level::Warning));
   // Falling back just below a limit keeps the level until past the hysteresis.
-  TEST_ASSERT_EQUAL(Level::Alarm, evaluate(1460, co2, Level::Alarm));
-  TEST_ASSERT_EQUAL(Level::Warning, evaluate(1449, co2, Level::Alarm));
-  TEST_ASSERT_EQUAL(Level::Warning, evaluate(960, co2, Level::Warning));
-  TEST_ASSERT_EQUAL(Level::Good, evaluate(950, co2, Level::Warning));
+  TEST_ASSERT_EQUAL(Level::Alarm, evaluate(2460, co2, Level::Alarm));
+  TEST_ASSERT_EQUAL(Level::Warning, evaluate(2449, co2, Level::Alarm));
+  TEST_ASSERT_EQUAL(Level::Warning, evaluate(910, co2, Level::Warning));
+  TEST_ASSERT_EQUAL(Level::Good, evaluate(900, co2, Level::Warning));
   // Rising doesn't use hysteresis.
-  TEST_ASSERT_EQUAL(Level::Good, evaluate(990, co2, Level::Good));
+  TEST_ASSERT_EQUAL(Level::Good, evaluate(940, co2, Level::Good));
 }
 
 static void test_level_two_sided() {

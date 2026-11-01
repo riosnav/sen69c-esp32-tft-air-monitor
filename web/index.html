@@ -259,7 +259,7 @@ const INFO = {
   co2: {
     what: 'Carbon dioxide, breathed out by people. It shows how well the room is ventilated.',
     risk: 'Not toxic at indoor levels, but high CO₂ comes with stuffy air and causes drowsiness, headaches and poorer concentration.',
-    basis: 'Warning: Health Canada indoor guideline (1000 ppm, 24-hour average); Germany’s Federal Environment Agency also rates air below 1000 ppm as harmless. Alarm: UK school ventilation guidance (BB101), daily average below 1500 ppm. Outdoor air is about 420 ppm.',
+    basis: 'Warning: Spain’s indoor air standard UNE 171330:2024 for offices and classrooms, 500 ppm above outdoor air (taken as 450 ppm). Alarm: its maximum. Germany’s Federal Environment Agency rates air below 1000 ppm as harmless and above 2000 ppm as unacceptable.',
     tolerance: '±(100 ppm + 10 % of the reading) from 400 to 5000 ppm, after the first 12 hours of use and some fresh air, and from an hour after each start.',
   },
   pm1: {
@@ -271,7 +271,7 @@ const INFO = {
   pm25: {
     what: 'Fine particles smaller than 2.5 µm: smoke, cooking, candles, traffic.',
     risk: 'They reach deep into the lungs; long exposure raises the risk of heart and lung disease.',
-    basis: 'Warning: WHO 2021 24-hour guideline. Alarm: US EPA 24-hour standard.',
+    basis: 'Warning: Spain’s indoor air standard UNE 171330:2024 for offices and classrooms, the same as the WHO 24-hour guideline. Alarm: the standard’s maximum. The EU’s outdoor limit is 25 µg/m³ as a daily average.',
     tolerance: '±(5 µg/m³ + 5 % of the reading) up to 100 µg/m³, ±10 % above.',
   },
   pm4: {
@@ -283,13 +283,13 @@ const INFO = {
   pm10: {
     what: 'Particles smaller than 10 µm: dust, pollen and mould spores, plus all the finer particles.',
     risk: 'They irritate the nose, throat and airways, and can worsen asthma.',
-    basis: 'Warning: WHO 2021 24-hour guideline. Alarm: US EPA 24-hour standard.',
+    basis: 'Warning: the EU’s daily limit from 2030, the same as the WHO 24-hour guideline. Alarm: WHO interim target for a 24-hour average. Spain’s indoor air standard has no PM10 value.',
     tolerance: '±25 µg/m³ up to 100 µg/m³, ±25 % above. Wider than for PM2.5 because the sensor estimates PM4 and PM10 from the smaller particles it counts.',
   },
   hcho: {
     what: 'Formaldehyde, given off by pressed-wood furniture, glues, varnishes, smoke and some cleaning products.',
     risk: 'It irritates the eyes, nose and throat; long exposure to high levels can cause cancer.',
-    basis: 'Warning: about the WELL building standard. Alarm: WHO 30-minute guideline (0.1 mg/m³, about 80 ppb).',
+    basis: 'Warning: Spain’s indoor air standard UNE 171330:2024 (50 µg/m³). Alarm: WHO Europe 30-minute guideline (0.1 mg/m³), also Germany’s indoor guide value; the standard sets no maximum.',
     tolerance: '±20 ppb or ±20 % of the reading, whichever is larger (specified up to 200 ppb), from 10 minutes after the sensor starts.',
   },
   voc: {
@@ -307,13 +307,13 @@ const INFO = {
   temp: {
     what: 'Air temperature at the monitor, corrected by the temperature offset setting.',
     risk: 'Too cold or too warm affects comfort and sleep; cold homes are a health risk, especially for older people.',
-    basis: 'Usual comfort range. The WHO recommends at least 18 °C indoors in cold weather.',
+    basis: 'Warning: European standard EN 16798-1 for homes, at least 18 °C (as the WHO advises) and at most 26 °C. Alarm: below 17 °C, the limit in Spain’s indoor air standard UNE 171330:2024; above 30 °C, allowing for homes without air conditioning.',
     tolerance: '±0.45 °C (±0.8 °F) from 15 to 30 °C, for the sensor alone; heat from the monitor itself adds to it unless the temperature offset corrects it.',
   },
   rh: {
     what: 'Relative humidity of the air.',
     risk: 'Too dry irritates the eyes, skin and airways; too humid encourages mould and dust mites.',
-    basis: 'Usual comfort range; above 70 % mould can grow.',
+    basis: 'Warning: Spain’s indoor air standard UNE 171330:2024, winter range (40–70 % in summer). Alarm: above its 70 % limit mould can grow; below 20 % the air is very dry.',
     tolerance: '±4.5 % from 30 to 70 % humidity, at 25 °C.',
   },
 };
