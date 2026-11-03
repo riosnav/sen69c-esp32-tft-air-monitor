@@ -7,6 +7,7 @@
 #include <WiFi.h>
 #include <Wire.h>
 #include <driver/gpio.h>
+#include <driver/rtc_io.h>
 #include <esp_sleep.h>
 
 #include "ui/Lgfx.h"
@@ -104,8 +105,15 @@ void showEmpty() {
   if (why == Off::ForBattery) {
     esp_sleep_enable_timer_wakeup(static_cast<uint64_t>(kCheckEveryMinutes) * 60 * 1000000);
   }
+  // Asleep, the chip watches D1 and D2 through its RTC side, which has its own
+  // pull-downs, separate from the ones pinMode() sets. Without them the pins
+  // float and wake it several times a second.
   uint64_t buttons = 0;
-  for (uint8_t pin : kWakeButtons) buttons |= 1ULL << pin;
+  for (uint8_t pin : kWakeButtons) {
+    rtc_gpio_pullup_dis(static_cast<gpio_num_t>(pin));
+    rtc_gpio_pulldown_en(static_cast<gpio_num_t>(pin));
+    buttons |= 1ULL << pin;
+  }
   esp_sleep_enable_ext1_wakeup_io(buttons, ESP_EXT1_WAKEUP_ANY_HIGH);
   Serial.flush();
   esp_deep_sleep_start();
