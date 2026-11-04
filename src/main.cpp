@@ -117,11 +117,13 @@ void setup() {
       {userSettings.tempOffsetC, userSettings.altitudeM, userSettings.co2SelfCalibration});
   wifi.begin(userSettings);
   mqtt.begin(userSettings, wifi);
+  if (power::startedOnUsbPower()) battery.pluggedIn(millis());
   ui.begin(sensor, userSettings, airQuality, *history, wifi, ota, mqtt, battery);
 }
 
 void loop() {
   static uint32_t lastSequence = 0;
+  static uint32_t lastBatterySequence = 0;
   static uint32_t lastLogMs = 0;
   const uint32_t now = millis();
   bool batteryEmpty = false;
@@ -144,10 +146,11 @@ void loop() {
     const bool offline = !userSettings.wifiEnabled || wifi.saved().size() == 0;
     ota.loop(wifi.state() == WifiState::Connected, offline, now);
     mqtt.loop(latest, airQuality, now);
-    if (userSettings.batteryInstalled) {
-      battery.update(latest.batteryVolts, latest.batteryPercent, latest.batteryRate, now);
-    } else {
+    if (!userSettings.batteryInstalled) {
       battery = power::BatteryWatch();
+    } else if (latest.batterySequence != lastBatterySequence) {
+      lastBatterySequence = latest.batterySequence;
+      battery.update(latest.batteryVolts, latest.batteryPercent, latest.batteryRate, now);
     }
     ui.update(latest, now);
 

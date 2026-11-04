@@ -286,6 +286,60 @@ static void test_battery_state_from_charge_rate() {
   TEST_ASSERT_EQUAL(power::BatteryState::Idle, power::stateOf(-0.208f));
 }
 
+static void test_battery_state_follows_voltage_jumps() {
+  using power::BatteryState;
+  power::BatteryWatch w;
+  uint32_t t = 0;
+  w.update(3.85f, 40, -60, t);
+  TEST_ASSERT_EQUAL(BatteryState::Discharging, w.state());
+  w.update(4.02f, 40, -58, t += 5000);  // plugged in; the rate hasn't followed yet
+  TEST_ASSERT_EQUAL(BatteryState::Charging, w.state());
+  w.update(4.03f, 40, -20, t += 60000);
+  TEST_ASSERT_EQUAL(BatteryState::Charging, w.state());
+  w.update(4.03f, 41, 30, t += 30000);  // it has
+  TEST_ASSERT_EQUAL(BatteryState::Charging, w.state());
+  w.update(3.86f, 41, 25, t += 5000);  // unplugged
+  TEST_ASSERT_EQUAL(BatteryState::Discharging, w.state());
+  w.update(3.85f, 41, 10, t += 60000);
+  TEST_ASSERT_EQUAL(BatteryState::Discharging, w.state());
+
+  power::BatteryWatch dip;  // Wi-Fi traffic on battery: not a plug
+  dip.update(3.70f, 50, -60, 0);
+  dip.update(3.655f, 50, -60, 5000);
+  dip.update(3.70f, 50, -60, 10000);
+  TEST_ASSERT_EQUAL(BatteryState::Discharging, dip.state());
+
+  power::BatteryWatch slow;  // the rate never follows: the jump stops counting
+  slow.update(3.85f, 40, -60, 0);
+  slow.update(4.02f, 40, -60, 5000);
+  TEST_ASSERT_EQUAL(BatteryState::Charging, slow.state());
+  slow.update(4.02f, 40, -60, 5000 + power::BatteryWatch::kSettleMs);
+  TEST_ASSERT_EQUAL(BatteryState::Discharging, slow.state());
+}
+
+static void test_battery_full_on_usb_is_not_in_use() {
+  using power::BatteryState;
+  power::BatteryWatch w;
+  w.update(4.155f, 96, -4.4f, 0);  // the rate wanders while it's full
+  TEST_ASSERT_EQUAL(BatteryState::Idle, w.state());
+  w.update(4.156f, 96, 4.6f, 5000);
+  TEST_ASSERT_EQUAL(BatteryState::Charging, w.state());
+  w.update(4.055f, 95, -4.2f, 10000);  // unplugged
+  TEST_ASSERT_EQUAL(BatteryState::Discharging, w.state());
+}
+
+static void test_battery_started_on_usb_power() {
+  // Started again by USB power after an empty battery: the rate still says
+  // discharging, and the charge is below the first warning's limit.
+  power::BatteryWatch w;
+  w.pluggedIn(0);
+  w.update(3.84f, 19.6f, -8.5f, 1000);
+  TEST_ASSERT_EQUAL(power::BatteryState::Charging, w.state());
+  TEST_ASSERT_EQUAL(0, w.warning());
+  w.update(3.85f, 20.1f, 3.7f, 61000);
+  TEST_ASSERT_EQUAL(power::BatteryState::Charging, w.state());
+}
+
 static void test_battery_warnings_with_hysteresis() {
   power::BatteryWatch w;
   w.update(3.7f, 21, -8, 0);
@@ -353,6 +407,9 @@ static int runTests() {
   RUN_TEST(test_ipv4_parse_and_format);
   RUN_TEST(test_fixed_address_checks);
   RUN_TEST(test_battery_state_from_charge_rate);
+  RUN_TEST(test_battery_state_follows_voltage_jumps);
+  RUN_TEST(test_battery_full_on_usb_is_not_in_use);
+  RUN_TEST(test_battery_started_on_usb_power);
   RUN_TEST(test_battery_warnings_with_hysteresis);
   RUN_TEST(test_battery_empty_after_a_minute_low);
   RUN_TEST(test_power_is_back);

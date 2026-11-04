@@ -446,7 +446,7 @@ esp_err_t getState(httpd_req_t* req) {
       cJSON* battery = cJSON_AddObjectToObject(r, "battery");
       addNumber(battery, "volts", s.batteryVolts, 2);
       addNumber(battery, "percent", s.batteryPercent, 0);
-      cJSON_AddStringToObject(battery, "state", batteryStateId(power::stateOf(s.batteryRate)));
+      cJSON_AddStringToObject(battery, "state", batteryStateId(ctx.battery->state()));
       cJSON_AddNumberToObject(battery, "warning", ctx.battery->warning());
     }
 

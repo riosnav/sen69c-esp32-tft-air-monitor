@@ -614,7 +614,7 @@ void Ui::drawDevice(uint32_t nowMs) {
     } else {
       // What it's doing if anything, else its voltage.
       String text = "Battery " + number(s.batteryPercent, 0) + " %";
-      const power::BatteryState state = power::stateOf(s.batteryRate);
+      const power::BatteryState state = battery_->state();
       if (state == power::BatteryState::Charging) {
         text += ", charging";
       } else if (state == power::BatteryState::Discharging) {

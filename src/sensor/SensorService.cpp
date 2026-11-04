@@ -57,7 +57,9 @@ constexpr uint32_t kPmStartupMs = 30000;
 constexpr uint32_t kPowerUpMs = 150;
 constexpr uint32_t kPollMs = 200;
 constexpr uint32_t kStatusIntervalMs = 10000;
-constexpr uint32_t kBatteryIntervalMs = 30000;
+// Often enough that the voltage jumps from one reading to the next when USB
+// power is plugged in or unplugged (see power::BatteryWatch).
+constexpr uint32_t kBatteryIntervalMs = 5000;
 constexpr uint32_t kRetryMs = 5000;
 // After this many failed reads in a row, look for the sensor again.
 constexpr uint32_t kMaxConsecutiveErrors = 10;
@@ -440,6 +442,7 @@ void SensorService::readBattery() {
   shared_.batteryVolts = ok ? vcell * 78.125e-6f : NAN;
   shared_.batteryPercent = ok ? soc / 256.0f : NAN;
   shared_.batteryRate = ok ? static_cast<int16_t>(crate) * 0.208f : NAN;
+  ++shared_.batterySequence;
 }
 
 void SensorService::setState(SensorState state, const char* activity) {

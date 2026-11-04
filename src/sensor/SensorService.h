@@ -43,6 +43,7 @@ struct SensorSnapshot {
   float batteryVolts = NAN;  // NaN when no battery monitor answers
   float batteryPercent = NAN;
   float batteryRate = NAN;  // % per hour, negative while discharging
+  uint32_t batterySequence = 0;  // increments with every battery reading
   // Altitude the sensor reported back after it was set; -1 when it couldn't be
   // read (it can only be read while the sensor is idle, i.e. at start).
   int32_t confirmedAltitudeM = -1;

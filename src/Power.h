@@ -25,6 +25,9 @@ constexpr uint32_t kOffCountdownS = 10;
 // First thing in setup(): after switching off, goes straight back to sleep
 // unless it's time to start.
 void begin();
+// Whether begin() let it start because USB power came back after an empty
+// battery. The battery monitor takes a minute or more to notice.
+bool startedOnUsbPower();
 // Switches off until D1 or D2 is held; doesn't return.
 [[noreturn]] void powerOff();
 // Switches off until USB power is back; doesn't return.

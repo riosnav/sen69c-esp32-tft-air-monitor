@@ -35,6 +35,8 @@ enum class Off : uint8_t { No, ByUser, ForBattery };
 // Why it's asleep. Kept through deep sleep, but not through a reset or a power cut.
 RTC_DATA_ATTR Off asleep = Off::No;
 
+bool usbStart = false;  // started again because USB power is back
+
 bool buttonPressed() {
   for (uint8_t pin : kWakeButtons) {
     if (digitalRead(pin) == HIGH) return true;
@@ -137,10 +139,15 @@ void begin() {
   float volts = NAN;
   float ratePerHour = NAN;
   readBattery(volts, ratePerHour);
-  if (powerIsBack(volts, ratePerHour)) return;
+  if (powerIsBack(volts, ratePerHour)) {
+    usbStart = true;
+    return;
+  }
   if (cause == ESP_SLEEP_WAKEUP_EXT1) showEmpty();
   sleep(Off::ForBattery);
 }
+
+bool startedOnUsbPower() { return usbStart; }
 
 void powerOff() {
   waitForRelease();  // the press that confirmed would wake it at once
