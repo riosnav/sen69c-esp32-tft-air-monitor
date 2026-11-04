@@ -613,7 +613,7 @@ void Ui::drawDevice(uint32_t nowMs) {
       line("No battery monitor", theme::kMuted);
     } else {
       // What it's doing if anything, else its voltage.
-      String text = "Battery " + number(s.batteryPercent, 0) + " %";
+      String text = "Battery " + number(battery_->percent(), 0) + " %";
       const power::BatteryState state = battery_->state();
       if (state == power::BatteryState::Charging) {
         text += ", charging";
@@ -1062,7 +1062,7 @@ void Ui::drawBatteryAlert() {
   frame_.setFont(kMedium);
   drawRich(frame_, veryLow ? "Battery very low" : "Battery low", x + 8, y + 23, color);
   frame_.setFont(kHuge);
-  const int vw = drawRich(frame_, number(snapshot_.batteryPercent, 0).c_str(), x + 8, y + 65, theme::kText);
+  const int vw = drawRich(frame_, number(battery_->percent(), 0).c_str(), x + 8, y + 65, theme::kText);
   frame_.setFont(kBody);
   drawRich(frame_, "%", x + 8 + vw + 4, y + 65, theme::kMuted);
   drawRich(frame_, "Connect USB power", x + 8, y + 85, theme::kText);

@@ -4,6 +4,8 @@
 
 #include <Preferences.h>
 
+#include <cmath>
+
 #include "Device.h"
 
 namespace settings {
@@ -73,6 +75,21 @@ void erase() {
   Preferences p;
   if (!p.begin(kNamespace, false)) return;
   p.clear();
+  p.end();
+}
+
+float loadBatteryEmpty() {
+  Preferences p;
+  if (!p.begin(kNamespace, true)) return NAN;
+  const float percent = p.getFloat("battEmpty", NAN);
+  p.end();
+  return percent;
+}
+
+void saveBatteryEmpty(float percent) {
+  Preferences p;
+  if (!p.begin(kNamespace, false)) return;
+  p.putFloat("battEmpty", percent);
   p.end();
 }
 

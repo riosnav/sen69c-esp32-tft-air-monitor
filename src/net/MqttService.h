@@ -16,6 +16,7 @@
 #pragma once
 
 #include <AirQuality.h>
+#include <BatteryWatch.h>
 #include <mqtt_client.h>
 
 #include <atomic>
@@ -34,7 +35,8 @@ enum class MqttState : uint8_t {
 
 class MqttService {
  public:
-  void begin(const Settings& settings, const WifiService& wifi);
+  void begin(const Settings& settings, const WifiService& wifi,
+             const power::BatteryWatch& battery);
   // Starts, restarts (when the settings change) or stops the client, and
   // publishes.
   void loop(const SensorSnapshot& snapshot, const aq::AirQuality& air, uint32_t nowMs);
@@ -65,6 +67,7 @@ class MqttService {
 
   const Settings* settings_ = nullptr;
   const WifiService* wifi_ = nullptr;
+  const power::BatteryWatch* battery_ = nullptr;
   char stateTopic_[48] = "";
   char statusTopic_[48] = "";
   char configTopic_[80] = "";

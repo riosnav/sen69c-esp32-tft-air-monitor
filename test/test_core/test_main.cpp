@@ -13,6 +13,7 @@
 #include <WifiChoice.h>
 #include <unity.h>
 
+#include <cmath>
 #include <memory>
 
 using namespace aq;
@@ -380,6 +381,34 @@ static void test_battery_warns_by_voltage() {
   TEST_ASSERT_EQUAL(0, w.warning());
 }
 
+static void test_battery_counts_down_to_switching_off() {
+  power::BatteryWatch w;
+  w.update(3.9f, 60, -75, 0);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 60, w.percent());  // nothing learned: the gauge's own
+  w.update(3.49f, 20.5f, -80, 5000);  // switching itself off
+  TEST_ASSERT_TRUE(w.learnEmpty());
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 20.5f, w.emptyPercent());
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 0, w.percent());
+  TEST_ASSERT_FALSE_MESSAGE(w.learnEmpty(), "unchanged");
+  w.update(3.9f, 60.25f, -75, 10000);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 50, w.percent());
+  w.update(3.7f, 36, -75, 15000);  // 19.5 % left: the warnings count what's left
+  TEST_ASSERT_EQUAL(1, w.warning());
+  w.update(4.15f, 100, 0, 20000);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 100, w.percent());
+
+  power::BatteryWatch off;
+  off.setEmptyPercent(20.5f);
+  off.update(3.49f, 55, -80, 0);  // a reading that's off isn't learned
+  TEST_ASSERT_FALSE(off.learnEmpty());
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 20.5f, off.emptyPercent());
+  off.setEmptyPercent(NAN);  // never learned
+  TEST_ASSERT_EQUAL_FLOAT(0, off.emptyPercent());
+  off.setEmptyPercent(75);
+  TEST_ASSERT_EQUAL_FLOAT(0, off.emptyPercent());
+  TEST_ASSERT_TRUE(std::isnan(power::BatteryWatch().percent()));
+}
+
 static void test_battery_empty_after_a_minute_low() {
   power::BatteryWatch w;
   uint32_t t = 1000;
@@ -432,6 +461,7 @@ static int runTests() {
   RUN_TEST(test_battery_started_on_usb_power);
   RUN_TEST(test_battery_warnings_with_hysteresis);
   RUN_TEST(test_battery_warns_by_voltage);
+  RUN_TEST(test_battery_counts_down_to_switching_off);
   RUN_TEST(test_battery_empty_after_a_minute_low);
   RUN_TEST(test_power_is_back);
   return UNITY_END();

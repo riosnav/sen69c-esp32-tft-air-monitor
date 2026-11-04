@@ -101,9 +101,11 @@ bool due(uint32_t nowMs, uint32_t atMs) { return static_cast<int32_t>(nowMs - at
 
 }  // namespace
 
-void MqttService::begin(const Settings& settings, const WifiService& wifi) {
+void MqttService::begin(const Settings& settings, const WifiService& wifi,
+                        const power::BatteryWatch& battery) {
   settings_ = &settings;
   wifi_ = &wifi;
+  battery_ = &battery;
   snprintf(stateTopic_, sizeof stateTopic_, "%s/state", device::hostname());
   snprintf(statusTopic_, sizeof statusTopic_, "%s/status", device::hostname());
   snprintf(configTopic_, sizeof configTopic_, "%s/device/%s/config", kDiscoveryPrefix,
@@ -307,7 +309,7 @@ void MqttService::publishState(const SensorSnapshot& snapshot, const aq::AirQual
   }
   addLevel(r, "air", air.overall());
   cJSON_AddNumberToObject(r, "rssi", wifi_->rssi());
-  if (settings_->batteryInstalled) addNumber(r, "battery", snapshot.batteryPercent, 0);
+  if (settings_->batteryInstalled) addNumber(r, "battery", battery_->percent(), 0);
   const JsonText text(cJSON_PrintUnformatted(r));
   if (text) esp_mqtt_client_enqueue(client_, stateTopic_, text.get(), 0, 0, 0, true);
 }

@@ -57,12 +57,28 @@ class BatteryWatch {
   static constexpr uint32_t kLowForMs = 60000;
   // After switching off: a battery this full can only be charging.
   static constexpr float kBackVolts = 3.8f;
+  // What the battery monitor reads when the monitor switches itself off is
+  // where "empty" is for this battery: about 20 % for a 400 mAh one. More
+  // than this means the reading was off, e.g. soon after a battery was
+  // connected to a running monitor, and it isn't learned.
+  static constexpr float kMaxEmptyPercent = 40;
 
   // With each new reading (NaN where there is none), every few seconds.
-  void update(float volts, float percent, float ratePerHour, uint32_t nowMs);
+  void update(float volts, float gaugePercent, float ratePerHour, uint32_t nowMs);
   // USB power has just come back, e.g. it's why the monitor started again.
   void pluggedIn(uint32_t nowMs);
   BatteryState state() const { return state_; }
+  // The charge left before the monitor switches itself off, in %; NaN if
+  // unknown. Until it has learned where that is, the battery monitor's own
+  // percentage.
+  float percent() const;
+  // What the battery monitor read the last time the monitor switched itself
+  // off (0 if never), as learnEmpty() found it.
+  float emptyPercent() const { return emptyPercent_; }
+  void setEmptyPercent(float gaugePercent);
+  // On switching itself off: learns the latest reading as where "empty" is.
+  // Returns whether that changed it.
+  bool learnEmpty();
   // 0: fine, charging, or no battery; 1: low; 2: very low.
   uint8_t warning() const { return warning_; }
   // Low for long enough while discharging: time to switch off.
@@ -85,6 +101,8 @@ class BatteryWatch {
   BatteryState stateFrom(float volts, float ratePerHour, uint32_t nowMs);
 
   BatteryState state_ = BatteryState::Unknown;
+  float gaugePercent_ = NAN;  // the battery monitor's latest reading
+  float emptyPercent_ = 0;
   float recent_[3] = {NAN, NAN, NAN};  // the last readings' voltages
   Jump jump_ = Jump::None;  // the last jump, until the rate follows it
   uint32_t jumpMs_ = 0;

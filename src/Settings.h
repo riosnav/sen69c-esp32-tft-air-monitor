@@ -40,5 +40,9 @@ namespace settings {
 Settings load();
 void save(const Settings& s);
 void erase();
+// Where "empty" is for the battery (power::BatteryWatch::emptyPercent());
+// NaN if not learned yet. Erased with the settings.
+float loadBatteryEmpty();
+void saveBatteryEmpty(float percent);
 
 }  // namespace settings

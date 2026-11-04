@@ -116,7 +116,8 @@ void setup() {
   sensor.begin(
       {userSettings.tempOffsetC, userSettings.altitudeM, userSettings.co2SelfCalibration});
   wifi.begin(userSettings);
-  mqtt.begin(userSettings, wifi);
+  mqtt.begin(userSettings, wifi, battery);
+  battery.setEmptyPercent(settings::loadBatteryEmpty());
   if (power::startedOnUsbPower()) battery.pluggedIn(millis());
   ui.begin(sensor, userSettings, airQuality, *history, wifi, ota, mqtt, battery);
 }
@@ -147,7 +148,9 @@ void loop() {
     ota.loop(wifi.state() == WifiState::Connected, offline, now);
     mqtt.loop(latest, airQuality, now);
     if (!userSettings.batteryInstalled) {
+      const float emptyPercent = battery.emptyPercent();
       battery = power::BatteryWatch();
+      battery.setEmptyPercent(emptyPercent);
     } else if (latest.batterySequence != lastBatterySequence) {
       lastBatterySequence = latest.batterySequence;
       battery.update(latest.batteryVolts, latest.batteryPercent, latest.batteryRate, now);
@@ -160,8 +163,9 @@ void loop() {
     }
     if (battery.empty()) {
       batteryEmpty = true;
-      Serial.printf("Battery empty (%.2f V): switching off until USB power is back\n",
-                    latest.batteryVolts);
+      Serial.printf("Battery empty (%.2f V, %.1f %%): switching off until USB power is back\n",
+                    latest.batteryVolts, latest.batteryPercent);
+      if (battery.learnEmpty()) settings::saveBatteryEmpty(battery.emptyPercent());
       ui.showBatteryEmpty();
       mqtt.shutDown();  // so Home Assistant shows it as unavailable at once
     } else if (ui.powerOffRequested()) {

@@ -53,18 +53,37 @@ BatteryState BatteryWatch::stateFrom(float volts, float ratePerHour, uint32_t no
   return state;
 }
 
-void BatteryWatch::update(float volts, float percent, float ratePerHour, uint32_t nowMs) {
+float BatteryWatch::percent() const {
+  if (std::isnan(gaugePercent_)) return NAN;
+  const float left = (gaugePercent_ - emptyPercent_) / (100 - emptyPercent_) * 100;
+  return std::clamp(left, 0.0f, 100.0f);
+}
+
+void BatteryWatch::setEmptyPercent(float gaugePercent) {
+  const bool plausible = gaugePercent >= 0 && gaugePercent <= kMaxEmptyPercent;  // not NaN
+  emptyPercent_ = plausible ? gaugePercent : 0;
+}
+
+bool BatteryWatch::learnEmpty() {
+  const float before = emptyPercent_;
+  if (gaugePercent_ <= kMaxEmptyPercent) setEmptyPercent(gaugePercent_);
+  return emptyPercent_ != before;
+}
+
+void BatteryWatch::update(float volts, float gaugePercent, float ratePerHour, uint32_t nowMs) {
+  gaugePercent_ = gaugePercent;
   noteJump(volts, nowMs);
   state_ = stateFrom(volts, ratePerHour, nowMs);
   const bool discharging = state_ == BatteryState::Discharging;
+  const float left = percent();
 
   uint8_t warning = 0;
-  if (discharging && !std::isnan(percent)) {
-    warning = percent <= kVeryLowPercent ? 2 : percent <= kLowPercent ? 1 : 0;
+  if (discharging && !std::isnan(left)) {
+    warning = left <= kVeryLowPercent ? 2 : left <= kLowPercent ? 1 : 0;
     // A warning lasts until the charge is clearly above its limit again, so
     // a reading that wavers around the limit doesn't warn again and again.
     const float limit = warning_ == 2 ? kVeryLowPercent : kLowPercent;
-    if (warning < warning_ && percent <= limit + kWarningHysteresis) warning = warning_;
+    if (warning < warning_ && left <= limit + kWarningHysteresis) warning = warning_;
   }
 
   // NaN compares false, so a missing reading counts as not low.
