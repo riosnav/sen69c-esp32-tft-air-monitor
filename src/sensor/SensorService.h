@@ -73,6 +73,9 @@ class SensorService {
   void restartVocLearning();
   // Most error flags stay set until cleared, even once the error is gone.
   void clearErrors();
+  // Makes the battery monitor estimate the charge afresh from the voltage,
+  // as when it's first powered.
+  void restartBatteryGauge();
   // Before powering off: lets the battery monitor hibernate again and stops
   // using the bus. Waits up to `timeoutMs` for the sensor task to get there.
   void powerDown(uint32_t timeoutMs);
@@ -86,6 +89,7 @@ class SensorService {
     ResetCo2Calibration,
     RestartVocLearning,
     ClearErrors,
+    RestartBatteryGauge,
     PowerDown,
   };
   struct Command {

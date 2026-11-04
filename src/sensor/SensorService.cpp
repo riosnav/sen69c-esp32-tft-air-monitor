@@ -130,6 +130,8 @@ void SensorService::restartVocLearning() { send({CommandType::RestartVocLearning
 
 void SensorService::clearErrors() { send({CommandType::ClearErrors, {}, 0}); }
 
+void SensorService::restartBatteryGauge() { send({CommandType::RestartBatteryGauge, {}, 0}); }
+
 void SensorService::powerDown(uint32_t timeoutMs) {
   send({CommandType::PowerDown, {}, 0});
   for (uint32_t start = millis(); !poweredDown_ && millis() - start < timeoutMs;) delay(10);
@@ -366,6 +368,9 @@ void SensorService::handle(const Command& cmd) {
       setResult(cleared ? "Sensor errors cleared" : "Could not clear the errors");
       return;
     }
+    case CommandType::RestartBatteryGauge:
+      writeRegister16(kAddrMax17048, 0x06, 0x4000);  // MODE: QuickStart
+      return;
     case CommandType::PowerDown:
       writeRegister16(kAddrMax17048, 0x0A, kGaugeHibernateDefault);
       poweredDown_ = true;

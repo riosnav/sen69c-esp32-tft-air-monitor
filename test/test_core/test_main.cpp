@@ -434,15 +434,16 @@ static void test_battery_empty_after_a_minute_low() {
   TEST_ASSERT_FALSE_MESSAGE(idle.empty(), "not discharging");
 }
 
+// Without a battery the battery monitor reads the charger (recorded, 5 s apart).
+static const float kCharger[] = {4.107f, 4.072f, 4.061f, 4.183f, 4.144f, 4.149f, 4.106f, 4.124f,
+                                 4.070f, 4.110f, 4.135f, 4.130f, 4.141f, 4.081f, 4.059f, 4.183f,
+                                 4.110f, 4.107f, 4.140f, 4.146f, 4.099f, 4.104f, 4.112f, 4.071f};
+
 static void test_battery_presence_from_the_voltage() {
-  // Without a battery the battery monitor reads the charger (recorded, 5 s apart).
-  const float charger[] = {4.107f, 4.072f, 4.061f, 4.183f, 4.144f, 4.149f, 4.106f, 4.124f,
-                           4.070f, 4.110f, 4.135f, 4.130f, 4.141f, 4.081f, 4.059f, 4.183f,
-                           4.110f, 4.107f, 4.140f, 4.146f, 4.099f, 4.104f, 4.112f, 4.071f};
   power::BatteryWatch w;
   w.setPresent(true);  // as before a restart
   uint32_t t = 0;
-  for (float v : charger) w.update(v, 98, -20, t += 5000);
+  for (float v : kCharger) w.update(v, 98, -20, t += 5000);
   TEST_ASSERT_FALSE(w.present());
   TEST_ASSERT_EQUAL(0, w.warning());
   for (int i = 0; i < 24; ++i) w.update(4.11f + i * 0.001f, 98, -20, t += 5000);  // connected
@@ -454,8 +455,28 @@ static void test_battery_presence_from_the_voltage() {
 
   power::BatteryWatch early;  // too few readings to tell
   early.setPresent(true);
-  for (int i = 0; i < 23; ++i) early.update(charger[i], 98, -20, i * 5000);
+  for (int i = 0; i < 23; ++i) early.update(kCharger[i], 98, -20, i * 5000);
   TEST_ASSERT_TRUE(early.present());
+}
+
+static void test_battery_connected_while_running() {
+  power::BatteryWatch w;
+  w.setEmptyPercent(20.5f);
+  uint32_t t = 0;
+  for (float v : kCharger) w.update(v, 98, -20, t += 5000);
+  TEST_ASSERT_FALSE(w.takeConnected());
+  for (int i = 0; i < 24; ++i) w.update(3.90f + i * 0.001f, 98, -20, t += 5000);
+  TEST_ASSERT_TRUE(w.present());
+  TEST_ASSERT_TRUE(w.takeConnected());
+  TEST_ASSERT_FALSE_MESSAGE(w.takeConnected(), "once");
+  TEST_ASSERT_EQUAL_FLOAT(0, w.emptyPercent());
+
+  power::BatteryWatch all;  // a battery all along, though not known at the start
+  all.setEmptyPercent(20.5f);
+  for (int i = 0; i < 24; ++i) all.update(3.90f - i * 0.001f, 50, -75, i * 5000);
+  TEST_ASSERT_TRUE(all.present());
+  TEST_ASSERT_FALSE(all.takeConnected());
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 20.5f, all.emptyPercent());
 }
 
 static void test_power_is_back() {
@@ -494,6 +515,7 @@ static int runTests() {
   RUN_TEST(test_battery_counts_down_to_switching_off);
   RUN_TEST(test_battery_empty_after_a_minute_low);
   RUN_TEST(test_battery_presence_from_the_voltage);
+  RUN_TEST(test_battery_connected_while_running);
   RUN_TEST(test_power_is_back);
   return UNITY_END();
 }

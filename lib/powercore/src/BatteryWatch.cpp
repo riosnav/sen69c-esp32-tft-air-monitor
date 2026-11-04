@@ -58,10 +58,22 @@ void BatteryWatch::notePresence(float volts) {
   float* middle = jumps + (kPresenceReadings - 1) / 2;
   std::nth_element(jumps, middle, jumps + kPresenceReadings - 1);
   if (*middle <= kSteadyVolts || low < kBatteryVolts) {
+    if (sawNone_) {
+      connected_ = true;
+      emptyPercent_ = 0;
+    }
+    sawNone_ = false;
     present_ = true;
   } else if (*middle >= kJitteryVolts && low >= kChargerVolts) {
+    sawNone_ = true;
     present_ = false;
   }
+}
+
+bool BatteryWatch::takeConnected() {
+  const bool connected = connected_;
+  connected_ = false;
+  return connected;
 }
 
 BatteryState BatteryWatch::stateFrom(float volts, float ratePerHour, uint32_t nowMs) {

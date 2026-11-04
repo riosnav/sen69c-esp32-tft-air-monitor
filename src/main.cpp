@@ -156,6 +156,10 @@ void loop() {
         Serial.println(battery.present() ? "Battery connected" : "No battery");
         settings::saveBatteryPresent(battery.present());
       }
+      if (battery.takeConnected()) {
+        sensor.restartBatteryGauge();
+        settings::saveBatteryEmpty(battery.emptyPercent());
+      }
     }
     ui.update(latest, now);
 

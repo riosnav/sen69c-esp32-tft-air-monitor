@@ -81,6 +81,10 @@ class BatteryWatch {
   // e.g. what it was before the monitor restarted.
   bool present() const { return present_; }
   void setPresent(bool present) { present_ = present; }
+  // Whether the readings have just shown a battery connected after none: the
+  // battery monitor's charge then still comes from reading the charger, and
+  // may be a different battery's. Forgets where "empty" was. True once.
+  bool takeConnected();
   BatteryState state() const { return state_; }
   // The charge left before the monitor switches itself off, in %; NaN if
   // unknown. Until it has learned where that is, the battery monitor's own
@@ -117,6 +121,8 @@ class BatteryWatch {
   BatteryState stateFrom(float volts, float ratePerHour, uint32_t nowMs);
 
   bool present_ = false;
+  bool sawNone_ = false;    // the readings showed no battery
+  bool connected_ = false;  // ... and then one, see takeConnected()
   float readings_[kPresenceReadings] = {};  // for notePresence(), oldest at next_
   size_t next_ = 0;
   size_t count_ = 0;
