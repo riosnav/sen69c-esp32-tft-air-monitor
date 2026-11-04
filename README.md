@@ -12,7 +12,7 @@ only, without sound, and it is not a smoke or carbon monoxide alarm.
 ![The monitor's main screen: CO₂ and PM2.5 in large digits, the other gases below them, then temperature and
 humidity, all in green](docs/screen.png)
 
-> **Status:** version 1.1.0.
+> **Status:** version 1.2.0.
 >
 > **Made with AI:** the code and documentation were written by an AI, Anthropic's Claude, working in Claude Code.
 > The author set the requirements, made the design decisions and tested the monitor on the real hardware.
