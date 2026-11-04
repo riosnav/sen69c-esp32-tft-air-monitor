@@ -208,19 +208,26 @@ in memory and start over after a restart or update (the web page can download th
 | Heat humidity sensor | Heats the humidity sensor for a second. After a long time in very humid air (a bathroom, a damp cellar) the humidity reads too high; this fixes it. Readings pause for about a minute. |
 | Restart VOC learning | The VOC and NOₓ indices compare the air with what they have learned over the last hours. This makes them start afresh, e.g. after moving the monitor to a room with different air, as unplugging it would: readings pause for about a minute, then the indices relearn over about 12 hours. CO₂ calibrations are kept. |
 | Restart | Restarts the monitor. |
-| Power off | Switches the monitor off, e.g. to carry it around on its battery. The screen shows how to turn it on again for 10 s: hold **D1** or **D2** for 2 s; USB power alone doesn't. Switched off, it still draws a little (about 0.1 mA), so a battery lasts weeks to months. For longer, unplug the battery. |
+| Power off | Switches the monitor off, e.g. to carry it around on its battery. The screen shows how to turn it on again for 10 s: hold **D1** or **D2** for 2 s; USB power alone doesn't. Switched off, it still draws a little current (not measured yet), so unplug the battery if it won't be used for weeks. |
 | Factory reset | Erases all settings, saved Wi-Fi networks, the web password and the Home Assistant settings. |
 
-If a LiPo battery is connected, tick *A battery is connected* on the web page (*Settings → Display and sensor*;
-this needs Wi-Fi set up once). Without a battery the board's battery gauge reads the charger, so this is off by
-default. With it ticked:
+If a LiPo battery is connected, the monitor notices by itself within about 2 minutes. (Without one, the board's
+battery gauge reads the charger instead; the monitor tells the two apart.) With a battery:
 
 - The *Device* page shows the battery's charge, and whether it's charging or running the monitor. Home Assistant
   gets a *Battery* sensor.
-- While the monitor runs on battery, a pop-up warns at 20 % and again at 10 %, and the web page shows a banner.
+- USB power charges the battery to full whenever it's connected; the board can't stop at a lower level.
+- While the monitor runs on battery, a pop-up warns when the battery is low and again when it's very low, and the
+  web page shows a banner: at 20 % and 10 %, or earlier if the voltage shows it running out sooner.
 - At about 3.5 V the monitor switches itself off: below that, the board can't give the sensor the voltage it needs,
   and the readings would be wrong. Once USB power is back it starts again by itself within 5 minutes; D1 or D2
-  starts it at once. Expect a battery to last hours, not days.
+  starts it at once.
+- The charge shown counts down to that point. Running the monitor, a small battery reaches 3.5 V while the gauge
+  still reads about 20 %. So the first time the monitor switches itself off, it remembers where "empty" is for its
+  battery, and from then on 0 % means it's about to switch off. Until then, e.g. with a new battery, it shows the
+  gauge's own percentage.
+- The monitor draws about 250–300 mA: a full 400 mAh battery ran it for 1¼ hours, so expect about 3 hours from
+  1000 mAh.
 
 ## Wi-Fi and the web page
 
@@ -356,8 +363,9 @@ sensor is on I²C address `0x6B`.
 
 The hardware-independent logic (`lib/aqcore`: limits, history, buttons, comfort maths; `lib/netcore`: choosing
 which Wi-Fi network to join, the delays after wrong web passwords, checking fixed addresses; `lib/powercore`:
-battery warnings and when to switch off) has Unity tests that run on the board. With native USB the serial port
-disappears while the board restarts, so upload and test in two steps:
+what the battery readings mean: whether one is connected and charging, the warnings, when to switch off) has
+Unity tests that run on the board. With native USB the serial port disappears while the board restarts, so upload
+and test in two steps:
 
 ```sh
 pio test --without-testing      # build and flash the test firmware
