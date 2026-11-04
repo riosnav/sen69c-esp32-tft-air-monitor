@@ -360,6 +360,26 @@ static void test_battery_warnings_with_hysteresis() {
   TEST_ASSERT_EQUAL(0, w.warning());
 }
 
+static void test_battery_warns_by_voltage() {
+  // A 400 mAh battery running the monitor: 3.6 V while the gauge read 45 %.
+  power::BatteryWatch w;
+  uint32_t t = 0;
+  w.update(3.61f, 46, -75, t);
+  TEST_ASSERT_EQUAL(0, w.warning());
+  w.update(3.60f, 45, -75, t += 5000);
+  w.update(3.59f, 45, -75, t += 55000);
+  TEST_ASSERT_EQUAL_MESSAGE(0, w.warning(), "55 s low");
+  w.update(3.59f, 45, -75, t += 5000);
+  TEST_ASSERT_EQUAL(1, w.warning());
+  w.update(3.62f, 44, -75, t += 5000);  // a lighter load lifts it for a moment
+  TEST_ASSERT_EQUAL(1, w.warning());
+  w.update(3.55f, 34, -75, t += 5000);
+  w.update(3.55f, 34, -75, t += 60000);
+  TEST_ASSERT_EQUAL(2, w.warning());
+  w.update(3.85f, 34, -60, t += 5000);  // plugged in
+  TEST_ASSERT_EQUAL(0, w.warning());
+}
+
 static void test_battery_empty_after_a_minute_low() {
   power::BatteryWatch w;
   uint32_t t = 1000;
@@ -411,6 +431,7 @@ static int runTests() {
   RUN_TEST(test_battery_full_on_usb_is_not_in_use);
   RUN_TEST(test_battery_started_on_usb_power);
   RUN_TEST(test_battery_warnings_with_hysteresis);
+  RUN_TEST(test_battery_warns_by_voltage);
   RUN_TEST(test_battery_empty_after_a_minute_low);
   RUN_TEST(test_power_is_back);
   return UNITY_END();

@@ -43,11 +43,18 @@ class BatteryWatch {
   static constexpr float kLowPercent = 20;
   static constexpr float kVeryLowPercent = 10;
   static constexpr float kWarningHysteresis = 2;  // % above a limit before its warning ends
+  // The battery monitor's percentage is for a battery at rest. Running the
+  // monitor, a small or worn battery reaches kEmptyVolts while it still
+  // reads 20 % or more, so the warnings also come at these voltages. With a
+  // 400 mAh battery that was 20 and 11 minutes before switching off.
+  static constexpr float kLowVolts = 3.6f;
+  static constexpr float kVeryLowVolts = 3.55f;
   // The sensor needs 3.15 V, which the board's regulator can't hold with the
   // battery much below this.
   static constexpr float kEmptyVolts = 3.5f;
-  // How long it must stay there, so a brief dip under load doesn't count.
-  static constexpr uint32_t kEmptyForMs = 60000;
+  // How long the voltage must stay below a limit, so a brief dip under load
+  // doesn't count.
+  static constexpr uint32_t kLowForMs = 60000;
   // After switching off: a battery this full can only be charging.
   static constexpr float kBackVolts = 3.8f;
 
@@ -59,10 +66,20 @@ class BatteryWatch {
   // 0: fine, charging, or no battery; 1: low; 2: very low.
   uint8_t warning() const { return warning_; }
   // Low for long enough while discharging: time to switch off.
-  bool empty() const { return empty_; }
+  bool empty() const { return isEmpty_; }
 
  private:
   enum class Jump : uint8_t { None, Up, Down };
+
+  // Whether the voltage has been below a limit for kLowForMs.
+  class Below {
+   public:
+    bool update(bool below, uint32_t nowMs);
+
+   private:
+    bool below_ = false;
+    uint32_t sinceMs_ = 0;
+  };
 
   void noteJump(float volts, uint32_t nowMs);
   BatteryState stateFrom(float volts, float ratePerHour, uint32_t nowMs);
@@ -72,9 +89,11 @@ class BatteryWatch {
   Jump jump_ = Jump::None;  // the last jump, until the rate follows it
   uint32_t jumpMs_ = 0;
   uint8_t warning_ = 0;
-  bool empty_ = false;
-  bool low_ = false;
-  uint32_t lowSinceMs_ = 0;
+  uint8_t voltsWarning_ = 0;  // from the voltage; lasts while discharging
+  Below low_;
+  Below veryLow_;
+  Below empty_;
+  bool isEmpty_ = false;
 };
 
 // After switching off for an empty battery: whether USB power is back, so

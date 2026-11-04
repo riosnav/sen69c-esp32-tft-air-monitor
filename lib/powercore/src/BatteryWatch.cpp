@@ -2,6 +2,7 @@
 
 #include "BatteryWatch.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace power {
@@ -65,18 +66,32 @@ void BatteryWatch::update(float volts, float percent, float ratePerHour, uint32_
     const float limit = warning_ == 2 ? kVeryLowPercent : kLowPercent;
     if (warning < warning_ && percent <= limit + kWarningHysteresis) warning = warning_;
   }
-  warning_ = warning;
 
-  if (!discharging || std::isnan(volts) || volts > kEmptyVolts) {
-    low_ = false;
-    empty_ = false;
-    return;
+  // NaN compares false, so a missing reading counts as not low.
+  const bool veryLow = veryLow_.update(discharging && volts <= kVeryLowVolts, nowMs);
+  const bool low = low_.update(discharging && volts <= kLowVolts, nowMs);
+  if (!discharging) {
+    voltsWarning_ = 0;
+  } else if (veryLow) {
+    voltsWarning_ = 2;
+  } else if (low && voltsWarning_ == 0) {
+    voltsWarning_ = 1;
   }
-  if (!low_) {
-    low_ = true;
-    lowSinceMs_ = nowMs;
+  warning_ = std::max(warning, voltsWarning_);
+
+  isEmpty_ = empty_.update(discharging && volts <= kEmptyVolts, nowMs);
+}
+
+bool BatteryWatch::Below::update(bool below, uint32_t nowMs) {
+  if (!below) {
+    below_ = false;
+    return false;
   }
-  empty_ = nowMs - lowSinceMs_ >= kEmptyForMs;
+  if (!below_) {
+    below_ = true;
+    sinceMs_ = nowMs;
+  }
+  return nowMs - sinceMs_ >= kLowForMs;
 }
 
 bool powerIsBack(float volts, float ratePerHour) {
