@@ -440,7 +440,7 @@ esp_err_t getState(httpd_req_t* req) {
       cJSON_AddNullToObject(sensor, "altitude");
     }
 
-    if (!ctx.settings->batteryInstalled || std::isnan(s.batteryVolts)) {
+    if (!ctx.battery->present() || std::isnan(s.batteryVolts)) {
       cJSON_AddNullToObject(r, "battery");
     } else {
       cJSON* battery = cJSON_AddObjectToObject(r, "battery");
@@ -604,7 +604,6 @@ void addSettings(cJSON* r, const Settings& s) {
   addNumber(r, "tempOffset", s.tempOffsetC, 1);
   cJSON_AddNumberToObject(r, "altitude", s.altitudeM);
   cJSON_AddBoolToObject(r, "co2SelfCalibration", s.co2SelfCalibration);
-  cJSON_AddBoolToObject(r, "batteryInstalled", s.batteryInstalled);
   cJSON_AddBoolToObject(r, "wifiEnabled", s.wifiEnabled);
   cJSON_AddBoolToObject(r, "passwordSet", s.webPassword[0] != '\0');
 }
@@ -682,10 +681,6 @@ const char* parseSettings(const cJSON* json, Settings& s) {
   if ((f = field(json, "co2SelfCalibration"))) {
     if (!cJSON_IsBool(f)) return "CO2 self-calibration: true or false";
     s.co2SelfCalibration = cJSON_IsTrue(f);
-  }
-  if ((f = field(json, "batteryInstalled"))) {
-    if (!cJSON_IsBool(f)) return "Battery: true or false";
-    s.batteryInstalled = cJSON_IsTrue(f);
   }
   if ((f = field(json, "wifiEnabled"))) {
     if (!cJSON_IsBool(f)) return "Wi-Fi: true or false";

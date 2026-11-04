@@ -608,7 +608,7 @@ void Ui::drawDevice(uint32_t nowMs) {
   if (s.state == SensorState::Measuring) {
     line("Measuring " + duration(nowMs - s.measuringSinceMs), theme::kMuted);
   }
-  if (settings_->batteryInstalled) {
+  if (battery_->present()) {
     if (std::isnan(s.batteryVolts)) {
       line("No battery monitor", theme::kMuted);
     } else {

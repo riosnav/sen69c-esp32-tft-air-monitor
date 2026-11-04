@@ -19,9 +19,6 @@ struct Settings {
   float tempOffsetC = 0;  // added to the measured temperature (corrects self-heating)
   uint16_t altitudeM = 0;  // for the CO2 sensor's pressure compensation
   bool co2SelfCalibration = true;
-  // Whether a battery is plugged in. Without one the board's battery gauge
-  // still reads the charger's voltage, so its readings are only shown when set.
-  bool batteryInstalled = false;
   bool wifiEnabled = true;
   char name[32] = "Air Monitor";  // shown on the web page
   // Protects changes made from the web page; empty = no password. A random
@@ -40,8 +37,13 @@ namespace settings {
 Settings load();
 void save(const Settings& s);
 void erase();
-// Where "empty" is for the battery (power::BatteryWatch::emptyPercent());
-// NaN if not learned yet. Erased with the settings.
+// What the monitor last found out about its battery (see
+// power::BatteryWatch), to start from after a restart. Erased with the
+// settings. Whether one is connected:
+bool loadBatteryPresent();
+void saveBatteryPresent(bool present);
+// Where "empty" is for it (power::BatteryWatch::emptyPercent()); NaN if not
+// learned yet.
 float loadBatteryEmpty();
 void saveBatteryEmpty(float percent);
 

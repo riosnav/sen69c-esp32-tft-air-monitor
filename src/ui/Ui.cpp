@@ -423,7 +423,7 @@ void Ui::updateAlerts(uint32_t nowMs) {
 
   // The battery, while it runs the monitor: low, then very low. It waits
   // behind an air alert.
-  const uint8_t battery = settings_->batteryInstalled ? battery_->warning() : 0;
+  const uint8_t battery = battery_->warning();
   if (battery < batteryAcknowledged_) batteryAcknowledged_ = battery;
   const uint8_t batteryAlert = battery > batteryAcknowledged_ ? battery : 0;
   if (batteryAlert != batteryAlert_ && batteryAlert != 0 && !alertVisible_) isNew = true;

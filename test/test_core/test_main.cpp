@@ -333,6 +333,7 @@ static void test_battery_started_on_usb_power() {
   // Started again by USB power after an empty battery: the rate still says
   // discharging, and the charge is below the first warning's limit.
   power::BatteryWatch w;
+  w.setPresent(true);
   w.pluggedIn(0);
   w.update(3.84f, 19.6f, -8.5f, 1000);
   TEST_ASSERT_EQUAL(power::BatteryState::Charging, w.state());
@@ -343,6 +344,7 @@ static void test_battery_started_on_usb_power() {
 
 static void test_battery_warnings_with_hysteresis() {
   power::BatteryWatch w;
+  w.setPresent(true);
   w.update(3.7f, 21, -8, 0);
   TEST_ASSERT_EQUAL(0, w.warning());
   w.update(3.7f, 20, -8, 0);
@@ -364,6 +366,7 @@ static void test_battery_warnings_with_hysteresis() {
 static void test_battery_warns_by_voltage() {
   // A 400 mAh battery running the monitor: 3.6 V while the gauge read 45 %.
   power::BatteryWatch w;
+  w.setPresent(true);
   uint32_t t = 0;
   w.update(3.61f, 46, -75, t);
   TEST_ASSERT_EQUAL(0, w.warning());
@@ -383,6 +386,7 @@ static void test_battery_warns_by_voltage() {
 
 static void test_battery_counts_down_to_switching_off() {
   power::BatteryWatch w;
+  w.setPresent(true);
   w.update(3.9f, 60, -75, 0);
   TEST_ASSERT_FLOAT_WITHIN(0.01f, 60, w.percent());  // nothing learned: the gauge's own
   w.update(3.49f, 20.5f, -80, 5000);  // switching itself off
@@ -411,6 +415,7 @@ static void test_battery_counts_down_to_switching_off() {
 
 static void test_battery_empty_after_a_minute_low() {
   power::BatteryWatch w;
+  w.setPresent(true);
   uint32_t t = 1000;
   w.update(3.49f, 4, -8, t);
   TEST_ASSERT_FALSE_MESSAGE(w.empty(), "just went low");
@@ -423,9 +428,34 @@ static void test_battery_empty_after_a_minute_low() {
   w.update(3.48f, 3, 20, t += 1000);  // USB power came back
   TEST_ASSERT_FALSE_MESSAGE(w.empty(), "charging");
   power::BatteryWatch idle;
+  idle.setPresent(true);
   idle.update(3.3f, 0, 0, 0);
   idle.update(3.3f, 0, 0, 120000);
   TEST_ASSERT_FALSE_MESSAGE(idle.empty(), "not discharging");
+}
+
+static void test_battery_presence_from_the_voltage() {
+  // Without a battery the battery monitor reads the charger (recorded, 5 s apart).
+  const float charger[] = {4.107f, 4.072f, 4.061f, 4.183f, 4.144f, 4.149f, 4.106f, 4.124f,
+                           4.070f, 4.110f, 4.135f, 4.130f, 4.141f, 4.081f, 4.059f, 4.183f,
+                           4.110f, 4.107f, 4.140f, 4.146f, 4.099f, 4.104f, 4.112f, 4.071f};
+  power::BatteryWatch w;
+  w.setPresent(true);  // as before a restart
+  uint32_t t = 0;
+  for (float v : charger) w.update(v, 98, -20, t += 5000);
+  TEST_ASSERT_FALSE(w.present());
+  TEST_ASSERT_EQUAL(0, w.warning());
+  for (int i = 0; i < 24; ++i) w.update(4.11f + i * 0.001f, 98, -20, t += 5000);  // connected
+  TEST_ASSERT_TRUE(w.present());
+
+  power::BatteryWatch busy;  // running the monitor, with Wi-Fi traffic
+  for (int i = 0; i < 24; ++i) busy.update(i % 2 ? 3.55f : 3.58f, 30, -75, i * 5000);
+  TEST_ASSERT_TRUE(busy.present());
+
+  power::BatteryWatch early;  // too few readings to tell
+  early.setPresent(true);
+  for (int i = 0; i < 23; ++i) early.update(charger[i], 98, -20, i * 5000);
+  TEST_ASSERT_TRUE(early.present());
 }
 
 static void test_power_is_back() {
@@ -463,6 +493,7 @@ static int runTests() {
   RUN_TEST(test_battery_warns_by_voltage);
   RUN_TEST(test_battery_counts_down_to_switching_off);
   RUN_TEST(test_battery_empty_after_a_minute_low);
+  RUN_TEST(test_battery_presence_from_the_voltage);
   RUN_TEST(test_power_is_back);
   return UNITY_END();
 }

@@ -130,7 +130,6 @@ footer { color: var(--muted); font-size: 12px; margin-top: 30px; }
       <label>Altitude (m, for the CO&#8322; reading)
         <input type="number" name="altitude" min="0" max="3000" step="10"></label>
       <label class="check"><input type="checkbox" name="co2SelfCalibration"> CO&#8322; self-calibration (needs fresh air at least once a week)</label>
-      <label class="check"><input type="checkbox" name="batteryInstalled"> A battery is connected (without one, the battery reading is meaningless)</label>
       <label class="check"><input type="checkbox" name="wifiEnabled"> Wi-Fi (turning it off disconnects this page)</label>
       <label>New web password <input type="password" name="newPassword" maxlength="32" autocomplete="new-password" placeholder="unchanged"></label>
       <label class="check"><input type="checkbox" name="noPassword"> No web password (anyone on your network can change settings)</label>
@@ -887,7 +886,6 @@ async function loadSettings() {
   f.tempOffset.value = s.tempOffset;
   f.altitude.value = s.altitude;
   f.co2SelfCalibration.checked = s.co2SelfCalibration;
-  f.batteryInstalled.checked = s.batteryInstalled;
   f.wifiEnabled.checked = s.wifiEnabled;
   $('#password-state').textContent = s.passwordSet
     ? 'A web password is set.'
@@ -911,7 +909,6 @@ $('#settings').addEventListener('submit', async (e) => {
     tempOffset: Number(f.tempOffset.value),
     altitude: Number(f.altitude.value),
     co2SelfCalibration: f.co2SelfCalibration.checked,
-    batteryInstalled: f.batteryInstalled.checked,
     wifiEnabled: f.wifiEnabled.checked,
   };
   if (f.noPassword.checked) body.webPassword = '';

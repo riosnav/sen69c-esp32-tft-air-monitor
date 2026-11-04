@@ -14,6 +14,7 @@
 #pragma once
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 
 namespace power {
@@ -62,11 +63,24 @@ class BatteryWatch {
   // than this means the reading was off, e.g. soon after a battery was
   // connected to a running monitor, and it isn't learned.
   static constexpr float kMaxEmptyPercent = 40;
+  // Without a battery, the battery monitor reads the charger instead: 4.0 to
+  // 4.2 V, jumping about 30 mV from one reading to the next. A battery's
+  // voltage moves a few mV, except under Wi-Fi traffic, and only a battery
+  // reads lower. Judged on the last 2 minutes of readings.
+  static constexpr size_t kPresenceReadings = 24;
+  static constexpr float kSteadyVolts = 0.005f;   // median jump: a battery
+  static constexpr float kJitteryVolts = 0.010f;  // median jump: the charger alone
+  static constexpr float kChargerVolts = 4.0f;    // the lowest the charger alone reads
+  static constexpr float kBatteryVolts = 3.95f;   // lower is a battery
 
   // With each new reading (NaN where there is none), every few seconds.
   void update(float volts, float gaugePercent, float ratePerHour, uint32_t nowMs);
   // USB power has just come back, e.g. it's why the monitor started again.
   void pluggedIn(uint32_t nowMs);
+  // Whether a battery is connected. Until the readings tell, what was set,
+  // e.g. what it was before the monitor restarted.
+  bool present() const { return present_; }
+  void setPresent(bool present) { present_ = present; }
   BatteryState state() const { return state_; }
   // The charge left before the monitor switches itself off, in %; NaN if
   // unknown. Until it has learned where that is, the battery monitor's own
@@ -80,6 +94,7 @@ class BatteryWatch {
   // Returns whether that changed it.
   bool learnEmpty();
   // 0: fine, charging, or no battery; 1: low; 2: very low.
+  // Both this and empty() are only ever set with a battery present.
   uint8_t warning() const { return warning_; }
   // Low for long enough while discharging: time to switch off.
   bool empty() const { return isEmpty_; }
@@ -98,8 +113,13 @@ class BatteryWatch {
   };
 
   void noteJump(float volts, uint32_t nowMs);
+  void notePresence(float volts);
   BatteryState stateFrom(float volts, float ratePerHour, uint32_t nowMs);
 
+  bool present_ = false;
+  float readings_[kPresenceReadings] = {};  // for notePresence(), oldest at next_
+  size_t next_ = 0;
+  size_t count_ = 0;
   BatteryState state_ = BatteryState::Unknown;
   float gaugePercent_ = NAN;  // the battery monitor's latest reading
   float emptyPercent_ = 0;

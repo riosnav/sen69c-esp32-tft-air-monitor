@@ -40,6 +40,30 @@ void BatteryWatch::noteJump(float volts, uint32_t nowMs) {
   recent_[0] = volts;
 }
 
+void BatteryWatch::notePresence(float volts) {
+  if (std::isnan(volts)) return;
+  readings_[next_] = volts;
+  next_ = (next_ + 1) % kPresenceReadings;
+  if (count_ < kPresenceReadings) ++count_;
+  if (count_ < kPresenceReadings) return;
+
+  float jumps[kPresenceReadings - 1];
+  float low = volts;
+  for (size_t i = 0; i + 1 < kPresenceReadings; ++i) {
+    const float a = readings_[(next_ + i) % kPresenceReadings];
+    const float b = readings_[(next_ + i + 1) % kPresenceReadings];
+    jumps[i] = std::fabs(b - a);
+    low = std::fmin(low, a);
+  }
+  float* middle = jumps + (kPresenceReadings - 1) / 2;
+  std::nth_element(jumps, middle, jumps + kPresenceReadings - 1);
+  if (*middle <= kSteadyVolts || low < kBatteryVolts) {
+    present_ = true;
+  } else if (*middle >= kJitteryVolts && low >= kChargerVolts) {
+    present_ = false;
+  }
+}
+
 BatteryState BatteryWatch::stateFrom(float volts, float ratePerHour, uint32_t nowMs) {
   BatteryState state = stateOf(ratePerHour);
   if (state == BatteryState::Unknown) return state;
@@ -72,6 +96,7 @@ bool BatteryWatch::learnEmpty() {
 
 void BatteryWatch::update(float volts, float gaugePercent, float ratePerHour, uint32_t nowMs) {
   gaugePercent_ = gaugePercent;
+  notePresence(volts);
   noteJump(volts, nowMs);
   state_ = stateFrom(volts, ratePerHour, nowMs);
   const bool discharging = state_ == BatteryState::Discharging;
@@ -96,9 +121,9 @@ void BatteryWatch::update(float volts, float gaugePercent, float ratePerHour, ui
   } else if (low && voltsWarning_ == 0) {
     voltsWarning_ = 1;
   }
-  warning_ = std::max(warning, voltsWarning_);
+  warning_ = present_ ? std::max(warning, voltsWarning_) : 0;
 
-  isEmpty_ = empty_.update(discharging && volts <= kEmptyVolts, nowMs);
+  isEmpty_ = empty_.update(discharging && volts <= kEmptyVolts, nowMs) && present_;
 }
 
 bool BatteryWatch::Below::update(bool below, uint32_t nowMs) {
