@@ -65,12 +65,16 @@ void BatteryWatch::notePresence(float volts) {
   if (*middle <= kSteadyVolts || low < kBatteryVolts) {
     if (sawNone_) {
       connected_ = true;
-      emptyPercent_ = 0;
+      // Only a battery away for a while may be another one; after a moment's
+      // doubt, where "empty" is stays as learned.
+      if (noneVerdicts_ >= kPresenceReadings) emptyPercent_ = 0;
     }
     sawNone_ = false;
+    noneVerdicts_ = 0;
     present_ = true;
   } else if (*middle >= kJitteryVolts && low >= kChargerVolts) {
     sawNone_ = true;
+    if (noneVerdicts_ < kPresenceReadings) ++noneVerdicts_;
     present_ = false;
   }
 }

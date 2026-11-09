@@ -128,7 +128,9 @@ class BatteryWatch {
   /// none. True once.
   ///
   /// The battery monitor's charge then still comes from reading the charger,
-  /// and may be a different battery's. Forgets where "empty" was.
+  /// and may be a different battery's. If there was none for at least
+  /// kPresenceReadings more readings, update() has also forgotten where
+  /// "empty" was: it may be another battery.
   bool takeConnected();
   /// What the battery is doing.
   BatteryState state() const { return state_; }
@@ -189,6 +191,7 @@ class BatteryWatch {
   bool present_ = false;
   bool sawNone_ = false;    ///< The readings showed no battery...
   bool connected_ = false;  ///< ...and then one; see takeConnected().
+  size_t noneVerdicts_ = 0;  ///< Readings in a row that said no battery, up to kPresenceReadings.
   float readings_[kPresenceReadings] = {};  ///< For notePresence(), oldest at next_.
   size_t next_ = 0;
   size_t count_ = 0;

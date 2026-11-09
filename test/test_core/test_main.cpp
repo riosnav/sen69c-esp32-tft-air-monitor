@@ -498,13 +498,24 @@ static void test_battery_connected_while_running() {
   power::BatteryWatch w;
   w.setEmptyPercent(20.5f);
   uint32_t t = 0;
-  for (float v : kCharger) w.update(v, 98, -20, t += 5000);
+  for (int pass = 0; pass < 2; ++pass) {  // no battery for 4 minutes
+    for (float v : kCharger) w.update(v, 98, -20, t += 5000);
+  }
   TEST_ASSERT_FALSE(w.takeConnected());
   for (int i = 0; i < 24; ++i) w.update(3.90f + i * 0.001f, 98, -20, t += 5000);
   TEST_ASSERT_TRUE(w.present());
   TEST_ASSERT_TRUE(w.takeConnected());
   TEST_ASSERT_FALSE_MESSAGE(w.takeConnected(), "once");
   TEST_ASSERT_EQUAL_FLOAT(0, w.emptyPercent());
+
+  power::BatteryWatch brief;  // no battery for a moment only
+  brief.setEmptyPercent(20.5f);
+  t = 0;
+  for (float v : kCharger) brief.update(v, 98, -20, t += 5000);
+  TEST_ASSERT_FALSE(brief.present());
+  for (int i = 0; i < 24; ++i) brief.update(3.90f + i * 0.001f, 98, -20, t += 5000);
+  TEST_ASSERT_TRUE(brief.takeConnected());
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 20.5f, brief.emptyPercent());
 
   power::BatteryWatch all;  // a battery all along, though not known at the start
   all.setEmptyPercent(20.5f);
