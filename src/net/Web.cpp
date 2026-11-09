@@ -469,8 +469,7 @@ const char* passwordOf(const char* header, unsigned char (&decoded)[128]) {
 /// @brief Whether a request may change things: it carries the web password,
 /// none is set, or it came through the setup hotspot.
 ///
-/// While the guard says wait after too many wrong passwords, nothing is
-/// checked. A request without a password isn't counted as a guess.
+/// A request without a password isn't counted as a guess.
 /// @param req The request.
 bool authorized(httpd_req_t* req) {
   if (viaHotspot(req)) return true;  // joining it took the password on the screen
@@ -664,8 +663,8 @@ esp_err_t getHistory(httpd_req_t* req) {
   httpd_query_key_value(query, "range", range, sizeof range);
   Metric metric;
   if (!metricFromId(id, metric)) return badRequest(req, "Unknown metric");
-  // The hour in 10 s means, the day in 1 min means, and the week in 5 min
-  // means: plenty for a chart, and a fifth of the data.
+  // The hour and the day as kept, in 10 s and 1 min means; the week in 5 min
+  // means, 2016 values instead of 10080, which is still plenty for a chart.
   using aq::MetricHistory;
   static constexpr struct {
     const char* id;

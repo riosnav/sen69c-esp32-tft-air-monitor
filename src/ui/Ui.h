@@ -8,7 +8,7 @@
 /// - Menu: D0/D2 move, D1 select, hold D1 to close.
 /// - Editing: D0/D2 change the value (hold to repeat), D1 done.
 /// - Before an action: hold D1 to confirm, D0 or D2 to cancel.
-/// - An alert: any button closes it.
+/// - An alert: a short press of any button closes it.
 ///
 /// The Wi-Fi setup and firmware update screens take over the whole display. An
 /// update sent from the web page waits there for an answer: holding any button

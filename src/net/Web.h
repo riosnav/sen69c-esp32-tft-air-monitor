@@ -27,8 +27,11 @@
 ///
 /// Those marked `*` need the web password (HTTP basic auth, any user name),
 /// except through the setup hotspot: joining it already took the password on
-/// the screen. After 3 wrong passwords in a row, passwords are refused (429)
-/// for a minute, doubling with each further miss, up to 15 minutes.
+/// the screen. Without it they answer 401; after 3 wrong passwords in a row,
+/// passwords are refused (429) for a minute, doubling with each further miss,
+/// up to 15 minutes at a time. Every POST also needs an `X-Requested-With`
+/// header, or answers 403 (see fromPage() in Web.cpp). History values are
+/// `null` where there was no reading.
 #pragma once
 
 #include <AirQuality.h>

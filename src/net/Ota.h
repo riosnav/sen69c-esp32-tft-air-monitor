@@ -11,7 +11,10 @@
 ///
 /// A new image runs on probation: it confirms itself once it has rejoined
 /// Wi-Fi, so an update that crashes, or can't reconnect within a few minutes,
-/// is rolled back to the previous firmware.
+/// is rolled back to the previous firmware. That relies on the bootloader's
+/// app rollback (CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE), which Arduino-ESP32's
+/// build has on. A restart or power cut on probation, or a router that's down
+/// meanwhile, rolls back a good image too; it can then simply be sent again.
 #pragma once
 
 #include <esp_ota_ops.h>
@@ -35,7 +38,9 @@ enum class OtaState : uint8_t {
 /// on the monitor, and confirms new firmware or rolls it back.
 ///
 /// The upload comes from the web server's task, the rest from the main loop;
-/// the state is atomic, so either may read it.
+/// the state is atomic, so either may read it. Refused, TimedOut and Failed
+/// last until the next upload; an image that wasn't installed just stays in
+/// the inactive slot, unused, until the next one overwrites it.
 class Ota {
  public:
   /// How long the monitor waits for an answer, in ms.

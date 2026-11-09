@@ -13,7 +13,11 @@ namespace device {
 
 /// Last four hex digits of the Wi-Fi MAC address, e.g. "a1b2".
 const char* shortId();
-/// DHCP and mDNS host name, e.g. "airmonitor-a1b2".
+/// @brief DHCP and mDNS host name, e.g. "airmonitor-a1b2"; also the base of
+/// the MQTT topics and Home Assistant's ids.
+///
+/// Its 4 hex digits may be the same on two monitors (1 in 65536); where an id
+/// must be unique, e.g. the MQTT client id, macId() is used.
 const char* hostname();
 /// The whole MAC address as 12 hex digits, for ids that must be unique.
 const char* macId();

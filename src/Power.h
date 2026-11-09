@@ -9,7 +9,9 @@
 /// with the screen, the sensor's power and the radio off. It still draws a
 /// little current, so a battery left connected slowly runs down.
 ///
-/// Switched off from the menu, holding D1 or D2 for 2 s turns it on again.
+/// Switched off from the menu, holding D1 or D2 for 2 s turns it on again. The
+/// countdown before can't be cancelled (the sensor has already stopped), and
+/// nothing watches the battery while it's off.
 /// Switched off for an empty battery, it wakes every few minutes, and when D1
 /// or D2 is pressed, and starts again once USB power is back; pressed without
 /// it, D1 or D2 shows why nothing happens.

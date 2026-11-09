@@ -58,9 +58,9 @@ IPAddress ipAddress(uint32_t a) { return IPAddress(a >> 24, a >> 16 & 0xFF, a >>
 
 /// @brief Whether a disconnect reason means a wrong password.
 ///
-/// AUTH_EXPIRE counts too: it's also what a router sends when it rejects the
-/// key, and with the setup hotspot up a wrong password comes back as that
-/// rather than as a handshake timeout.
+/// AUTH_EXPIRE counts too: routers also send it to reject a key, and while
+/// the setup hotspot is up it's the reason a wrong password gives, rather
+/// than a handshake timeout.
 /// @param reason A `WIFI_REASON_` code.
 bool isPasswordFailure(uint8_t reason) {
   return reason == WIFI_REASON_MIC_FAILURE || reason == WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT ||
@@ -447,9 +447,10 @@ void WifiService::startSetup() {
   device::randomPassword(hotspotPassword_, kHotspotPasswordLength);
   WiFi.softAP(hotspotSsid_, hotspotPassword_);
   // Every DNS name resolves to us, so the phone's connectivity check reaches
-  // the web server, which redirects it to the setup page. (No DHCP option
-  // 114: phones expect it to name a JSON API, and an iPhone given the page
-  // instead decides the hotspot has no internet and leaves it.)
+  // the web server, which redirects it to the setup page. DHCP option 114
+  // (the captive-portal address) isn't sent: phones expect a JSON API there,
+  // and some, given a web page instead, drop the hotspot as having no
+  // internet.
   hotspotIp_ = WiFi.softAPIP();
   dns_.start(53, "*", hotspotIp_);
   scanRequested_ = true;  // for the list of networks on the setup page

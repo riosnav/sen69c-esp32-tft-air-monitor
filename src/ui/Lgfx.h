@@ -40,8 +40,8 @@ class Lgfx : public lgfx::LGFX_Device {
       cfg.pin_cs = TFT_CS;
       cfg.pin_rst = TFT_RST;
       cfg.pin_busy = -1;
-      // The 135x240 window sits inside the controller's 240x320 memory.
-      // Checked on hardware: offset_x 53 shows an unwritten row at one edge.
+      // The 135x240 window sits inside the controller's 240x320 memory, 52
+      // columns in (53 leaves an unwritten row at one edge of the screen).
       cfg.panel_width = 135;
       cfg.panel_height = 240;
       cfg.offset_x = 52;

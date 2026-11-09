@@ -219,6 +219,9 @@ void loop() {
   }
   if (batteryEmpty) {
     delay(kEmptyMessageMs);
+    // Without sensor.powerDown(): the battery gauge stays awake (about 20 uA
+    // more) so its charge rate is current when the monitor wakes to check
+    // whether USB power is back (power::powerIsBack()).
     power::shutDownForBattery();
   }
   if (powerOff) {

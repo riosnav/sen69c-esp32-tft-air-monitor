@@ -39,10 +39,11 @@ constexpr int kNetworkTimeoutMs = 5000;
 /// @brief Wait before trying again after losing the broker, e.g. when Wi-Fi
 /// rejoins, in ms.
 ///
-/// Shorter than the client's default of 10 s, so Home Assistant isn't kept
-/// waiting for the monitor.
+/// Short, so Home Assistant gets the readings again soon after the monitor
+/// rejoins Wi-Fi.
 constexpr int kReconnectMs = 3000;
-/// The client's send buffer, in bytes: holds the ~4.2 KB discovery message.
+/// The client's send buffer, in bytes: room for the discovery message, the
+/// largest the monitor sends, with plenty to spare.
 constexpr int kOutBufferBytes = 8192;
 constexpr const char* kDiscoveryPrefix = "homeassistant";  ///< Home Assistant's discovery topics.
 

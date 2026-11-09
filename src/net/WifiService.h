@@ -88,7 +88,7 @@ class WifiService {
   /// @brief Saves a network without trying it first (web page, while
   /// connected).
   ///
-  /// While searching, it's looked for at once.
+  /// While searching, and the setup hotspot isn't up, it's looked for at once.
   /// @param network The network.
   void save(const WifiCredentials& network);
   /// @brief Forgets a saved network, and leaves it if it's the one in use.
@@ -114,7 +114,9 @@ class WifiService {
   ///
   /// Turns Wi-Fi on in the settings if it was off. While the hotspot is up,
   /// only the phone decides which network to try, so an attempt in progress is
-  /// dropped; a network already joined stays.
+  /// dropped. A network already joined stays until the phone has one tried
+  /// (tryNetwork()); after that the saved networks are only looked for again
+  /// once the hotspot closes.
   void startSetup();
   /// @brief Closes the setup hotspot, and drops a network still being tried
   /// from it; the search for saved networks starts again.

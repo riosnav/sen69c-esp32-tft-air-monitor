@@ -36,7 +36,7 @@ struct SensorSnapshot {
   /// The latest values; NaN where not available yet, and all NaN while the
   /// sensor isn't measuring.
   aq::Measurement measurement;
-  uint32_t sequence = 0;  ///< Increments with every new measurement, and when they are cleared.
+  uint32_t sequence = 0;  ///< Increments with every new measurement, and when the values are cleared.
   SensorState state = SensorState::Starting;  ///< What the sensor is doing.
   const char* activity = "";      ///< What the sensor is doing while Busy.
   /// @brief uptimeMs() when the current measurement started.

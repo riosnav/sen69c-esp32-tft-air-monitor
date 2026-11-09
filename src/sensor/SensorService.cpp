@@ -60,8 +60,8 @@ constexpr int16_t kUnknownI16 = 0x7FFF;  ///< The same for a signed value.
 /// In the first 24 s it causes a CO2 error. And the VOC and NOx algorithms
 /// only take their starting point after about 45 s of measuring (they show
 /// `--` until then): stopped earlier, they take it from the unsettled readings
-/// after the restart and report nonsense (NOx near 500, VOC 1) until they have
-/// relearned.
+/// after the restart, and their indices are wrong until they have relearned,
+/// which takes hours.
 constexpr uint32_t kMinRunMs = 60000;
 constexpr uint32_t kFanCleaningMs = 10000;  ///< How long the fan cleaning runs, in ms.
 /// @brief The first firmware version (major part) that reports when the

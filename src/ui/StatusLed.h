@@ -12,7 +12,7 @@
 
 /// @brief The NeoPixel, in the overall air quality's colour.
 ///
-/// Green for good, orange for fair, red for poor, and blue while warming up or
+/// Green for good, amber for fair, red for poor, and blue while warming up or
 /// unknown; blinking once a second for an alarm.
 class StatusLed {
  public:
