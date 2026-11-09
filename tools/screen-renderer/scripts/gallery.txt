@@ -160,6 +160,11 @@ shot menu/15-confirm-power-off.png
 hold d1
 shot menu/16-switching-off.png
 power-on
+menu silence
+click d1
+shot menu/17-silence-warnings.png
+click d1
+setting silence off
 
 # The Wi-Fi page
 page wifi

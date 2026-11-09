@@ -6,6 +6,10 @@
 #include <cstdint>
 
 enum class LedMode : uint8_t { Off, Dim, Bright };
+// Quiet, e.g. for the night: which alerts no longer turn the screen on. While
+// it's not Off, the screen also switches off when idle instead of dimming, and
+// the LED stays off but for an alarm that may still turn the screen on.
+enum class Silence : uint8_t { Off, Warnings, All };
 
 // Choices for Settings::dimAfterS.
 constexpr uint16_t kDimOptionsS[] = {0, 30, 60, 120, 300, 900};
@@ -16,6 +20,7 @@ struct Settings {
   bool screenOffWhenIdle = false;  // switch the screen off then, instead of dimming it
   bool fahrenheit = false;
   LedMode led = LedMode::Dim;
+  Silence silence = Silence::Off;
   float tempOffsetC = 0;  // added to the measured temperature (corrects self-heating)
   uint16_t altitudeM = 0;  // for the CO2 sensor's pressure compensation
   bool co2SelfCalibration = true;

@@ -67,6 +67,7 @@ Settings
   setting units c|f
   setting idle-screen dim|off
   setting led off|dim|bright
+  setting silence off|warnings|all
   setting co2-self-calibration|wifi on|off
   setting web-password|name TEXT
   battery VOLTS PERCENT [RATE] | none a battery reading (connects one); RATE in % per hour,
@@ -416,6 +417,10 @@ class Runner {
         s.fahrenheit = value == "f";
       } else if (name == "led" && (value == "off" || value == "dim" || value == "bright")) {
         s.led = value == "off" ? LedMode::Off : value == "dim" ? LedMode::Dim : LedMode::Bright;
+      } else if (name == "silence" && (value == "off" || value == "warnings" || value == "all")) {
+        s.silence = value == "off" ? Silence::Off
+                    : value == "warnings" ? Silence::Warnings
+                                          : Silence::All;
       } else if (name == "temp-offset" && isNumber) {
         s.tempOffsetC = static_cast<float>(number);
       } else if (name == "altitude" && isNumber && number >= 0 && number <= 3000) {

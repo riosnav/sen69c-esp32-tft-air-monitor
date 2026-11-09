@@ -61,6 +61,7 @@ class Ui {
     IdleScreen,
     Units,
     Led,
+    Silence,
     Wifi,
     WifiSetup,
     ForgetWifi,
@@ -100,6 +101,7 @@ class Ui {
   void dismissAlert();
   bool alertShowing() const { return alertVisible_ || batteryAlert_ != 0; }
   void updateBacklight(uint32_t nowMs);
+  uint32_t idleAfterS() const;
   void applyBacklight();
   void showToast(const char* text, uint32_t nowMs);
   bool warmingUp() const;

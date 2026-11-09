@@ -25,6 +25,7 @@ Settings load() {
     s.screenOffWhenIdle = p.getBool("idleOff", s.screenOffWhenIdle);
     s.fahrenheit = p.getBool("degF", s.fahrenheit);
     s.led = static_cast<LedMode>(p.getUChar("led", static_cast<uint8_t>(s.led)));
+    s.silence = static_cast<Silence>(p.getUChar("silence", static_cast<uint8_t>(s.silence)));
     s.tempOffsetC = p.getFloat("tOffset", s.tempOffsetC);
     s.altitudeM = p.getUShort("alt", s.altitudeM);
     s.co2SelfCalibration = p.getBool("co2Asc", s.co2SelfCalibration);
@@ -55,6 +56,7 @@ void save(const Settings& s) {
   p.putBool("idleOff", s.screenOffWhenIdle);
   p.putBool("degF", s.fahrenheit);
   p.putUChar("led", static_cast<uint8_t>(s.led));
+  p.putUChar("silence", static_cast<uint8_t>(s.silence));
   p.putFloat("tOffset", s.tempOffsetC);
   p.putUShort("alt", s.altitudeM);
   p.putBool("co2Asc", s.co2SelfCalibration);

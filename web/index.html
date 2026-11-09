@@ -125,6 +125,8 @@ footer { color: var(--muted); font-size: 12px; margin-top: 30px; }
         <select name="units"><option value="C">&deg;C</option><option value="F">&deg;F</option></select></label>
       <label>Status LED
         <select name="led"><option value="off">Off</option><option value="dim">Dim</option><option value="bright">Bright</option></select></label>
+      <label>Silence, e.g. at night (the screen switches off when idle, and the LED stays off)
+        <select name="silence"><option value="off">Off</option><option value="warnings">Warnings: only alarms turn the screen on</option><option value="all">All: no alert turns the screen on</option></select></label>
       <label>Temperature offset (&deg;C, corrects self-heating)
         <input type="number" name="tempOffset" min="-10" max="10" step="0.1"></label>
       <label>Altitude (m, for the CO&#8322; reading)
@@ -883,6 +885,7 @@ async function loadSettings() {
   f.idleScreen.value = s.idleScreen;
   f.units.value = s.fahrenheit ? 'F' : 'C';
   f.led.value = s.led;
+  f.silence.value = s.silence;
   f.tempOffset.value = s.tempOffset;
   f.altitude.value = s.altitude;
   f.co2SelfCalibration.checked = s.co2SelfCalibration;
@@ -906,6 +909,7 @@ $('#settings').addEventListener('submit', async (e) => {
     idleScreen: f.idleScreen.value,
     fahrenheit: f.units.value === 'F',
     led: f.led.value,
+    silence: f.silence.value,
     tempOffset: Number(f.tempOffset.value),
     altitude: Number(f.altitude.value),
     co2SelfCalibration: f.co2SelfCalibration.checked,

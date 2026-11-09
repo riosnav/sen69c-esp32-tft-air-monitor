@@ -182,6 +182,10 @@ const char* ledId(LedMode mode) {
   return mode == LedMode::Off ? "off" : mode == LedMode::Dim ? "dim" : "bright";
 }
 
+const char* silenceId(Silence silence) {
+  return silence == Silence::Off ? "off" : silence == Silence::Warnings ? "warnings" : "all";
+}
+
 bool metricFromId(const char* id, Metric& out) {
   for (size_t i = 0; i < aq::kMetricCount; ++i) {
     if (strcmp(id, aq::kMetricIds[i]) == 0) {
@@ -601,6 +605,7 @@ void addSettings(cJSON* r, const Settings& s) {
   cJSON_AddStringToObject(r, "idleScreen", s.screenOffWhenIdle ? "off" : "dim");
   cJSON_AddBoolToObject(r, "fahrenheit", s.fahrenheit);
   cJSON_AddStringToObject(r, "led", ledId(s.led));
+  cJSON_AddStringToObject(r, "silence", silenceId(s.silence));
   addNumber(r, "tempOffset", s.tempOffsetC, 1);
   cJSON_AddNumberToObject(r, "altitude", s.altitudeM);
   cJSON_AddBoolToObject(r, "co2SelfCalibration", s.co2SelfCalibration);
@@ -664,6 +669,18 @@ const char* parseSettings(const cJSON* json, Settings& s) {
       s.led = LedMode::Bright;
     } else {
       return "Status LED: off, dim or bright";
+    }
+  }
+  if ((f = field(json, "silence"))) {
+    const char* silence = cJSON_IsString(f) ? f->valuestring : "";
+    if (strcmp(silence, "off") == 0) {
+      s.silence = Silence::Off;
+    } else if (strcmp(silence, "warnings") == 0) {
+      s.silence = Silence::Warnings;
+    } else if (strcmp(silence, "all") == 0) {
+      s.silence = Silence::All;
+    } else {
+      return "Silence: off, warnings or all";
     }
   }
   if ((f = field(json, "tempOffset"))) {

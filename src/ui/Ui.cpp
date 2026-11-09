@@ -19,6 +19,8 @@ constexpr uint32_t kDrawIntervalMs = 250;
 constexpr uint32_t kToastMs = 4000;
 constexpr uint32_t kMenuTimeoutMs = 60000;
 constexpr uint32_t kAlertTimeoutMs = 60000;
+// When the screen switches off while silenced, if it's set never to dim.
+constexpr uint32_t kSilencedIdleS = 120;
 constexpr uint16_t kOutdoorCo2Ppm = 420;
 
 template <typename E>
@@ -28,6 +30,12 @@ E stepEnum(E value, int delta, E count) {
 }
 
 uint8_t backlight(uint8_t percent) { return static_cast<uint8_t>(percent * 255 / 100); }
+
+// Whether an alert at `level` may turn the screen on. Battery alerts count as
+// warnings.
+bool wakesScreen(Silence silence, aq::Level level) {
+  return silence == Silence::Off || (silence == Silence::Warnings && level == aq::Level::Alarm);
+}
 
 // Whether an update fills the screen.
 bool updating(OtaState state) {
@@ -87,8 +95,11 @@ void Ui::update(const SensorSnapshot& snapshot, uint32_t nowMs) {
     dirty_ = true;
   }
   updateBacklight(nowMs);
-  led_.update(aq_->overall(), warmingUp(), alertVisible_ && alertLevel_ == aq::Level::Alarm,
-              settings_->led, nowMs);
+  // Silenced, the LED stays dark, except for an alarm that may turn the screen on.
+  const bool alarm = alertVisible_ && alertLevel_ == aq::Level::Alarm;
+  const bool ledOn =
+      settings_->silence == Silence::Off || (alarm && wakesScreen(settings_->silence, alertLevel_));
+  led_.update(aq_->overall(), warmingUp(), alarm, ledOn ? settings_->led : LedMode::Off, nowMs);
   if (dirty_ || nowMs - lastDrawMs_ >= kDrawIntervalMs) {
     draw(nowMs);
     lastDrawMs_ = nowMs;
@@ -281,6 +292,7 @@ void Ui::select(Item item) {
     case Item::IdleScreen:
     case Item::Units:
     case Item::Led:
+    case Item::Silence:
     case Item::Wifi:
     case Item::Co2SelfCalibration:
       adjust(item, +1);
@@ -332,6 +344,9 @@ void Ui::adjust(Item item, int direction) {
       break;
     case Item::Led:
       s.led = static_cast<LedMode>((static_cast<int>(s.led) + direction + 3) % 3);
+      break;
+    case Item::Silence:
+      s.silence = static_cast<Silence>((static_cast<int>(s.silence) + direction + 3) % 3);
       break;
     case Item::Wifi:
       s.wifiEnabled = !s.wifiEnabled;
@@ -431,10 +446,14 @@ void Ui::updateAlerts(uint32_t nowMs) {
 
   if (isNew) {
     alertShownMs_ = nowMs;
-    lastInputMs_ = nowMs;  // wake the screen
+    // Silenced, it waits for a button press to turn the screen on.
+    const aq::Level shown = alertVisible_ ? alertLevel_ : aq::Level::Warning;
+    if (wakesScreen(settings_->silence, shown)) lastInputMs_ = nowMs;  // wake the screen
     dirty_ = true;
   }
-  // Left alone, an alert closes by itself, as if dismissed.
+  // Left alone, an alert closes by itself, as if dismissed, a minute after
+  // the screen came on to show it.
+  if (alertShowing() && dimmed_) alertShownMs_ = nowMs;
   if (alertShowing() && nowMs - alertShownMs_ >= kAlertTimeoutMs) dismissAlert();
 }
 
@@ -451,20 +470,29 @@ void Ui::dismissAlert() {
 }
 
 void Ui::updateBacklight(uint32_t nowMs) {
-  // Screens that show something to scan or wait for stay bright.
+  // Screens that show something to scan or wait for stay bright, and so does
+  // an alert once the screen is on.
   const bool fullScreen = wifi_->setupActive() || updating(ota_->state());
-  const bool dim = settings_->dimAfterS != 0 && mode_ == Mode::Pages && !fullScreen &&
-                   !alertShowing() && nowMs - lastInputMs_ >= settings_->dimAfterS * 1000UL;
+  const bool alertOnScreen = alertShowing() && !dimmed_;
+  const uint32_t idleS = idleAfterS();
+  const bool dim = idleS != 0 && mode_ == Mode::Pages && !fullScreen && !alertOnScreen &&
+                   nowMs - lastInputMs_ >= idleS * 1000UL;
   if (dim == dimmed_) return;
   dimmed_ = dim;
   applyBacklight();
 }
 
-// Full brightness, dimmed, or (idle, if so set) the screen switched off. Only
-// the backlight and the display chip sleep: the sensor shares the screen's
-// power, which stays on.
+// How long without input until the screen dims or switches off; 0 = never.
+uint32_t Ui::idleAfterS() const {
+  const bool never = settings_->dimAfterS == 0;
+  return never && settings_->silence != Silence::Off ? kSilencedIdleS : settings_->dimAfterS;
+}
+
+// Full brightness, dimmed, or (idle, if so set or silenced) the screen switched
+// off. Only the backlight and the display chip sleep: the sensor shares the
+// screen's power, which stays on.
 void Ui::applyBacklight() {
-  const bool off = dimmed_ && settings_->screenOffWhenIdle;
+  const bool off = dimmed_ && (settings_->screenOffWhenIdle || settings_->silence != Silence::Off);
   if (off != screenOff_) {
     screenOff_ = off;
     if (off) {

@@ -70,6 +70,7 @@ struct Inside {
       {"idle-screen", Item::IdleScreen},
       {"units", Item::Units},
       {"led", Item::Led},
+      {"silence", Item::Silence},
       {"wifi", Item::Wifi},
       {"wifi-setup", Item::WifiSetup},
       {"forget-wifi", Item::ForgetWifi},
