@@ -612,8 +612,7 @@ class Runner {
       return "";
     }
     if (command == "fixed-ip") {
-      bool on = false;
-      if (n != 1 || !parseSwitch(arg(1), on)) return "expected: fixed-ip on|off";
+      if (n != 1 || !parseSwitch(lower(arg(1)), on)) return "expected: fixed-ip on|off";
       world.wifi.fixedAddress = on;
       return "";
     }
