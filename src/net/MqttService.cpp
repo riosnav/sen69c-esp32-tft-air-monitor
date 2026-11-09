@@ -404,6 +404,9 @@ void MqttService::onEvent(void* self, esp_event_base_t, int32_t id, void* data) 
       const bool whole = event->topic != nullptr && event->current_data_offset == 0 &&
                          event->data_len == event->total_data_len;
       if (!whole || std::string_view(event->topic, event->topic_len) != mqtt.silenceTopic_) break;
+      // A retained command would come again at every reconnect and override
+      // whatever was set since.
+      if (event->retain) break;
       const std::string_view option(event->data, event->data_len);
       for (int i = 0; i < 3; ++i) {
         if (option == kSilenceOptions[i]) mqtt.requestedSilence_ = i;
