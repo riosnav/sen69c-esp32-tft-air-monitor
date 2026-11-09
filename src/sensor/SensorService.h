@@ -16,7 +16,7 @@
 
 /// What the sensor is doing.
 enum class SensorState : uint8_t {
-  Starting,   ///< Looking for the sensor.
+  Starting,   ///< Looking for the sensor and starting it.
   Measuring,  ///< Measuring continuously.
   Busy,       ///< Stopped for a maintenance operation; see SensorSnapshot::activity.
   NotFound,   ///< Not answering, or not starting; it's tried again every few seconds.
@@ -33,8 +33,10 @@ struct SensorConfig {
 /// @brief The sensor's latest state, as the sensor task shares it with the
 /// rest (see SensorService::snapshot()).
 struct SensorSnapshot {
-  aq::Measurement measurement;  ///< The latest values; NaN where not available yet.
-  uint32_t sequence = 0;  ///< Increments with every new measurement.
+  /// The latest values; NaN where not available yet, and all NaN while the
+  /// sensor isn't measuring.
+  aq::Measurement measurement;
+  uint32_t sequence = 0;  ///< Increments with every new measurement, and when they are cleared.
   SensorState state = SensorState::Starting;  ///< What the sensor is doing.
   const char* activity = "";      ///< What the sensor is doing while Busy.
   uint32_t measuringSinceMs = 0;  ///< millis() when the current measurement started.
@@ -202,6 +204,9 @@ class SensorService {
   /// the snapshot; NaN if it doesn't answer.
   void readBattery();
   /// @brief Sets what the sensor is doing, here and in the snapshot.
+  ///
+  /// Leaving Measuring clears the snapshot's values, so old readings don't
+  /// pass for current ones.
   /// @param state The state.
   /// @param activity What it's doing while Busy, shown on the screen; it must
   ///   last, like a string literal.
@@ -225,6 +230,7 @@ class SensorService {
   uint32_t consecutiveErrors_ = 0;  ///< Failed reads in a row.
   bool gaugeAwake_ = false;  ///< The battery monitor's hibernation is off.
   uint32_t lastBatteryMs_ = 0;  ///< millis() when the battery monitor was last read.
+  uint32_t lastDataMs_ = 0;  ///< millis() of the last measurement, or of the start.
   std::atomic<bool> gaugeRestartRequested_{false};  ///< restartBatteryGauge() was called.
   std::atomic<bool> powerDownRequested_{false};  ///< powerDown() was called.
   std::atomic<bool> poweredDown_{false};  ///< The sensor task has done powerDown().

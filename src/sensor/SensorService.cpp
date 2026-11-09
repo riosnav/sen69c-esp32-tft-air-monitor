@@ -89,6 +89,12 @@ constexpr uint32_t kBatteryIntervalMs = 5000;
 constexpr uint32_t kRetryMs = 5000;
 /// After this many failed reads in a row, look for the sensor again.
 constexpr uint32_t kMaxConsecutiveErrors = 10;
+/// @brief Without a new measurement for this long, in ms, look for the sensor
+/// again.
+///
+/// It measures every second; a sensor that answers but stops measuring
+/// would otherwise go unnoticed.
+constexpr uint32_t kNoDataMs = 10000;
 
 /// @brief A raw unsigned value in its units.
 /// @param raw The raw value.
@@ -223,8 +229,13 @@ void SensorService::run() {
         lastStatus = now;
         readDeviceStatus();
       }
+      if (state_ == SensorState::Measuring && now - lastDataMs_ >= kNoDataMs) {
+        Serial.println("No new measurement from the sensor");
+        consecutiveErrors_ = kMaxConsecutiveErrors;
+      }
     }
     Serial.println("Sensor stopped answering; looking for it again");
+    setState(SensorState::Starting);
   }
 }
 
@@ -494,6 +505,7 @@ void SensorService::pollMeasurement() {
   m[Metric::Hcho] = scaled(hcho, 10);
   m[Metric::Co2] = scaled(co2, 1);
 
+  lastDataMs_ = millis();
   Lock lock(mutex_);
   shared_.measurement = m;
   ++shared_.sequence;
@@ -529,10 +541,17 @@ void SensorService::readBattery() {
 }
 
 void SensorService::setState(SensorState state, const char* activity) {
+  const bool wasMeasuring = state_ == SensorState::Measuring;
   state_ = state;
+  if (state == SensorState::Measuring) lastDataMs_ = millis();
   Lock lock(mutex_);
   shared_.state = state;
   shared_.activity = activity;
+  if (wasMeasuring && state != SensorState::Measuring) {
+    // Readings from before mustn't pass for current ones.
+    shared_.measurement = aq::Measurement();
+    ++shared_.sequence;
+  }
 }
 
 void SensorService::setResult(const char* format, ...) {
