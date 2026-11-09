@@ -148,6 +148,11 @@ void loop() {
     const bool offline = !userSettings.wifiEnabled || wifi.saved().size() == 0;
     ota.loop(wifi.state() == WifiState::Connected, offline, now);
     mqtt.loop(latest, airQuality, now);
+    Silence silence;
+    if (mqtt.takeSilence(silence) && silence != userSettings.silence) {
+      userSettings.silence = silence;
+      ui.settingsChanged();  // applies and saves it
+    }
     if (latest.batterySequence != lastBatterySequence) {
       lastBatterySequence = latest.batterySequence;
       const bool hadBattery = battery.present();

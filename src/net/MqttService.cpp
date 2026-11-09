@@ -6,6 +6,7 @@
 #include <esp_log.h>
 
 #include <cstring>
+#include <string_view>
 
 #include "Device.h"
 #include "net/Json.h"
@@ -59,6 +60,8 @@ constexpr SensorInfo kSensors[aq::kMetricCount] = {
 
 // Air quality levels, named as on the web page.
 const char* const kAirLevels[] = {"Good", "Fair", "Poor"};
+// In the order of Silence.
+const char* const kSilenceOptions[] = {"Off", "Warnings", "All"};
 
 const char* airText(Level level) {
   switch (level) {
@@ -73,11 +76,13 @@ const char* airText(Level level) {
   }
 }
 
-// A sensor of the discovery message, reading `path` of the state JSON. Keys
-// are abbreviated where Home Assistant allows it, to keep the message small.
-cJSON* addSensor(cJSON* components, const char* key, const char* name, const char* path) {
+// An entity of the discovery message (`platform` "sensor", "select"...),
+// reading `path` of the state JSON. Keys are abbreviated where Home Assistant
+// allows it, to keep the message small.
+cJSON* addComponent(cJSON* components, const char* platform, const char* key, const char* name,
+                    const char* path) {
   cJSON* c = cJSON_AddObjectToObject(components, key);
-  cJSON_AddStringToObject(c, "p", "sensor");
+  cJSON_AddStringToObject(c, "p", platform);
   cJSON_AddStringToObject(c, "name", name);
   char text[64];
   snprintf(text, sizeof text, "{{ value_json.%s }}", path);
@@ -85,6 +90,10 @@ cJSON* addSensor(cJSON* components, const char* key, const char* name, const cha
   snprintf(text, sizeof text, "%s_%s", device::hostname(), key);
   cJSON_AddStringToObject(c, "uniq_id", text);
   return c;
+}
+
+cJSON* addSensor(cJSON* components, const char* key, const char* name, const char* path) {
+  return addComponent(components, "sensor", key, name, path);
 }
 
 // A Good/Fair/Poor sensor.
@@ -110,6 +119,7 @@ void MqttService::begin(const Settings& settings, const WifiService& wifi,
   snprintf(statusTopic_, sizeof statusTopic_, "%s/status", device::hostname());
   snprintf(configTopic_, sizeof configTopic_, "%s/device/%s/config", kDiscoveryPrefix,
            device::hostname());
+  snprintf(silenceTopic_, sizeof silenceTopic_, "%s/silence/set", device::hostname());
   // The client logs every failed attempt; state() and logChanges() say it once.
   esp_log_level_set("mqtt_client", ESP_LOG_NONE);
   esp_log_level_set("transport_base", ESP_LOG_NONE);
@@ -131,7 +141,8 @@ void MqttService::loop(const SensorSnapshot& snapshot, const aq::AirQuality& air
     announce();
     lastStateMs_ = nowMs - kStateIntervalMs + kFirstStateDelayMs;
   }
-  if (nowMs - lastStateMs_ >= kStateIntervalMs) {
+  // A new Silence at once, so Home Assistant's select follows.
+  if (nowMs - lastStateMs_ >= kStateIntervalMs || settings_->silence != publishedSilence_) {
     lastStateMs_ = nowMs;
     publishState(snapshot, air);
   }
@@ -158,6 +169,14 @@ const char* MqttService::error() const {
 
 void MqttService::shutDown() {
   if (client_ != nullptr) stop();
+}
+
+bool MqttService::takeSilence(Silence& silence) {
+  const int requested = requestedSilence_.exchange(-1);
+  if (requested < 0) return false;
+  silence = static_cast<Silence>(requested);
+  Serial.printf("MQTT: silence %s, from Home Assistant\n", kSilenceOptions[requested]);
+  return true;
 }
 
 bool MqttService::wanted() const {
@@ -278,6 +297,11 @@ void MqttService::announce() {
     // Removes it, if an earlier announcement had it.
     cJSON_AddStringToObject(cJSON_AddObjectToObject(components, "battery"), "p", "sensor");
   }
+  cJSON* silence = addComponent(components, "select", "silence", "Silence", "silence");
+  cJSON_AddStringToObject(silence, "cmd_t", silenceTopic_);
+  cJSON_AddItemToObject(silence, "options", cJSON_CreateStringArray(kSilenceOptions, 3));
+  cJSON_AddStringToObject(silence, "icon", "mdi:bell-sleep");
+  cJSON_AddStringToObject(silence, "entity_category", "config");
 
   const JsonText text(cJSON_PrintUnformatted(r));
   if (!text) return;
@@ -289,6 +313,7 @@ void MqttService::announce() {
                 config < 0 || online < 0 ? ", but it could not be queued" : "");
   strlcpy(announcedName_, settings_->name, sizeof announcedName_);
   announcedBattery_ = battery_->present();
+  publishedSilence_ = settings_->silence;  // the state follows shortly
 }
 
 void MqttService::publishState(const SensorSnapshot& snapshot, const aq::AirQuality& air) {
@@ -310,6 +335,8 @@ void MqttService::publishState(const SensorSnapshot& snapshot, const aq::AirQual
   addLevel(r, "air", air.overall());
   cJSON_AddNumberToObject(r, "rssi", wifi_->rssi());
   if (battery_->present()) addNumber(r, "battery", battery_->percent(), 0);
+  cJSON_AddStringToObject(r, "silence", kSilenceOptions[static_cast<int>(settings_->silence)]);
+  publishedSilence_ = settings_->silence;
   const JsonText text(cJSON_PrintUnformatted(r));
   if (text) esp_mqtt_client_enqueue(client_, stateTopic_, text.get(), 0, 0, 0, true);
 }
@@ -331,7 +358,19 @@ void MqttService::onEvent(void* self, esp_event_base_t, int32_t id, void* data) 
       mqtt.error_ = Error::None;
       mqtt.connected_ = true;
       mqtt.justConnected_ = true;
+      esp_mqtt_client_subscribe_single(event->client, mqtt.silenceTopic_, 1);
       break;
+    case MQTT_EVENT_DATA: {
+      // Home Assistant's select sends the option's name, never split up.
+      const bool whole = event->topic != nullptr && event->current_data_offset == 0 &&
+                         event->data_len == event->total_data_len;
+      if (!whole || std::string_view(event->topic, event->topic_len) != mqtt.silenceTopic_) break;
+      const std::string_view option(event->data, event->data_len);
+      for (int i = 0; i < 3; ++i) {
+        if (option == kSilenceOptions[i]) mqtt.requestedSilence_ = i;
+      }
+      break;
+    }
     case MQTT_EVENT_DISCONNECTED:
       mqtt.connected_ = false;
       break;
