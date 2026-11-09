@@ -7,12 +7,12 @@
 
 namespace net {
 
-uint32_t LoginGuard::waitMs(uint32_t nowMs) const {
-  const uint32_t elapsed = nowMs - waitFromMs_;
-  return elapsed >= waitForMs_ ? 0 : waitForMs_ - elapsed;
+uint32_t LoginGuard::waitMs(uint64_t nowMs) const {
+  const uint64_t elapsed = nowMs - waitFromMs_;
+  return elapsed >= waitForMs_ ? 0 : static_cast<uint32_t>(waitForMs_ - elapsed);
 }
 
-void LoginGuard::failed(uint32_t nowMs) {
+void LoginGuard::failed(uint64_t nowMs) {
   ++failures_;
   if (++streak_ < kFreeTries) return;
   uint32_t wait = kFirstWaitMs;

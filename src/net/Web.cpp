@@ -482,7 +482,7 @@ bool authorized(httpd_req_t* req) {
   if (password[0] == '\0') return true;
 
   // While the guard says wait, nothing is checked (refuse() says why).
-  const uint32_t now = millis();
+  const uint64_t now = uptimeMs();
   if (guard.waitMs(now) > 0) return false;
   char header[160];
   if (httpd_req_get_hdr_value_str(req, "Authorization", header, sizeof header) != ESP_OK) {
@@ -507,7 +507,7 @@ bool authorized(httpd_req_t* req) {
 /// @param req The request.
 /// @return ESP_OK, or an error to close the connection.
 esp_err_t refuse(httpd_req_t* req) {
-  const uint32_t waitS = (guard.waitMs(millis()) + 999) / 1000;
+  const uint32_t waitS = (guard.waitMs(uptimeMs()) + 999) / 1000;
   if (waitS > 0) {
     char retryAfter[12];
     snprintf(retryAfter, sizeof retryAfter, "%u", static_cast<unsigned>(waitS));
@@ -583,7 +583,6 @@ esp_err_t getState(httpd_req_t* req) {
     AppLock lock;
     const SensorSnapshot& s = *ctx.snapshot;
     const aq::AirQuality& air = *ctx.airQuality;
-    const uint32_t now = millis();
     cJSON_AddStringToObject(r, "name", ctx.settings->name);
     cJSON_AddStringToObject(r, "host", device::hostname());
     cJSON_AddStringToObject(r, "version", FW_VERSION);
@@ -642,7 +641,7 @@ esp_err_t getState(httpd_req_t* req) {
 
     cJSON* login = cJSON_AddObjectToObject(r, "login");
     cJSON_AddNumberToObject(login, "failed", guard.failures());
-    cJSON_AddNumberToObject(login, "wait", (guard.waitMs(now) + 999) / 1000);
+    cJSON_AddNumberToObject(login, "wait", (guard.waitMs(uptimeMs()) + 999) / 1000);
   }
   return sendJson(req, r);
 }

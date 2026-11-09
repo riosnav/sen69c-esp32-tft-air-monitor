@@ -25,12 +25,13 @@ class LoginGuard {
 
   /// @brief How much longer passwords are refused without being checked, in
   /// ms; 0 = they're checked.
-  /// @param nowMs The time, as millis().
-  uint32_t waitMs(uint32_t nowMs) const;
+  /// @param nowMs The time since start, in ms, as a count that doesn't wrap
+  ///   (millis() would, after 49.7 days, and make an old wait look current).
+  uint32_t waitMs(uint64_t nowMs) const;
   /// @brief Takes a wrong password: from the kFreeTries-th in a row on, each
   /// one starts a wait, kFirstWaitMs and then twice the last, up to kMaxWaitMs.
-  /// @param nowMs The time, as millis().
-  void failed(uint32_t nowMs);
+  /// @param nowMs The time since start, in ms, as for waitMs().
+  void failed(uint64_t nowMs);
   /// Takes the right password: no wait, and the next miss is the first in a row.
   void succeeded();
   /// Wrong passwords since start.
@@ -39,7 +40,7 @@ class LoginGuard {
  private:
   uint32_t streak_ = 0;  ///< Wrong passwords in a row.
   uint32_t failures_ = 0;
-  uint32_t waitFromMs_ = 0;  ///< When the current wait started.
+  uint64_t waitFromMs_ = 0;  ///< When the current wait started.
   uint32_t waitForMs_ = 0;   ///< How long it lasts, in ms; 0 = none.
 };
 

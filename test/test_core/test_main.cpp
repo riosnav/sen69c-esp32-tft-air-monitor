@@ -256,13 +256,15 @@ static void test_login_guard_waits_double_up_to_a_limit() {
   TEST_ASSERT_EQUAL(16, g.failures());
 }
 
-/// LoginGuard's wait still ends when millis() wraps.
-static void test_login_guard_survives_millis_wrapping() {
+/// LoginGuard's wait ends for good, also past where millis() would wrap.
+static void test_login_guard_wait_ends_for_good() {
   net::LoginGuard g;
-  const uint32_t t = 0xFFFFFFFFu - 30000;
+  const uint64_t t = 0xFFFFFFFFull - 30000;
   for (int i = 0; i < 3; ++i) g.failed(t);
-  TEST_ASSERT_EQUAL(30000, g.waitMs(t + 30000));  // past the wrap
+  TEST_ASSERT_EQUAL(30000, g.waitMs(t + 30000));  // past 2^32 ms
   TEST_ASSERT_EQUAL(0, g.waitMs(t + 60000));
+  TEST_ASSERT_EQUAL(0, g.waitMs(t + 0x100000000ull));  // 49.7 days later
+  TEST_ASSERT_EQUAL(0, g.waitMs(t + 0x100000000ull + 1000));
 }
 
 /// parseIpv4() takes exactly `a.b.c.d`; formatIpv4() writes it.
@@ -539,7 +541,7 @@ static int runTests() {
   RUN_TEST(test_wifi_choice_strongest_first_then_hidden);
   RUN_TEST(test_wifi_choice_ties_keep_saved_order);
   RUN_TEST(test_login_guard_waits_double_up_to_a_limit);
-  RUN_TEST(test_login_guard_survives_millis_wrapping);
+  RUN_TEST(test_login_guard_wait_ends_for_good);
   RUN_TEST(test_ipv4_parse_and_format);
   RUN_TEST(test_fixed_address_checks);
   RUN_TEST(test_battery_state_from_charge_rate);
