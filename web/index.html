@@ -454,15 +454,24 @@ function apiHeaders(extra = {}) {
 }
 
 /**
- * Sends a request to the monitor, with apiHeaders().
+ * Sends a request to the monitor, with apiHeaders(). It gives up after a while,
+ * so a connection that has stalled shows as one (e.g. the offline banner)
+ * rather than leaving the page waiting.
  * @param {string} path The path, e.g. /api/state.
- * @param {RequestInit} [options={}] As for fetch().
+ * @param {RequestInit & {timeoutMs?: number}} [options={}] As for fetch(),
+ *   plus how long to wait for the whole reply, in ms (default 15 s).
  * @returns {Promise<*>} The reply: parsed if it's JSON, else its text ('' if
  *   none).
- * @throws {Error} The monitor's reason, if it turns the request down.
+ * @throws {Error} The monitor's reason, if it turns the request down; or a
+ *   TimeoutError.
  */
 async function request(path, options = {}) {
-  const response = await fetch(path, { ...options, headers: apiHeaders(options.headers) });
+  const { timeoutMs = 15000, ...init } = options;
+  const response = await fetch(path, {
+    ...init,
+    headers: apiHeaders(init.headers),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
   const text = await response.text();
   if (!response.ok) throw new Error(text || `${response.status} ${response.statusText}`);
   return text && (response.headers.get('Content-Type') || '').includes('json') ? JSON.parse(text) : text;
@@ -762,12 +771,13 @@ function renderState() {
   if (sensor.altitude != null) rows.push(['Altitude for CO₂', `${sensor.altitude} m, confirmed by the sensor`]);
   if (s.battery) {
     const use = { charging: ', charging', discharging: ', running the monitor' }[s.battery.state] || '';
-    rows.push(['Battery', `${s.battery.percent ?? '?'} %, ${s.battery.volts.toFixed(2)} V${use}`]);
+    const volts = s.battery.volts == null ? '?' : s.battery.volts.toFixed(2);
+    rows.push(['Battery', `${s.battery.percent ?? '?'} %, ${volts} V${use}`]);
   }
   const low = s.battery ? s.battery.warning : 0;
   $('#battery-low').hidden = !low;
   if (low) {
-    $('#battery-low').textContent = `The battery is ${low > 1 ? 'very ' : ''}low (${s.battery.percent} %). Connect USB power; ` +
+    $('#battery-low').textContent = `The battery is ${low > 1 ? 'very ' : ''}low (${s.battery.percent ?? '?'} %). Connect USB power; ` +
       'at about 3.5 V the monitor switches off to protect it, and starts again once USB power is back.';
   }
   rows.push(['Wi-Fi', s.wifi.ssid ? `${s.wifi.ssid}, ${s.wifi.rssi} dBm` : 'not connected']);
@@ -1041,7 +1051,7 @@ async function downloadHistory() {
   message('download-msg', 'Preparing…');
   try {
     const at = Date.now();
-    const lines = (await request('/api/history.csv')).trim().split(/\r?\n/);
+    const lines = (await request('/api/history.csv', { timeoutMs: 120000 })).trim().split(/\r?\n/);
     const pad = (n) => String(n).padStart(2, '0');
     const stamp = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
     const rows = lines.map((line, i) => {
@@ -1411,6 +1421,11 @@ $('#upload').addEventListener('click', async () => {
   xhr.addEventListener('error', () => {
     bar.hidden = true;
     message('ota-msg', 'Upload failed: the connection was lost.', true);
+  });
+  xhr.timeout = 5 * 60000;  // far more than an upload takes over Wi-Fi
+  xhr.addEventListener('timeout', () => {
+    bar.hidden = true;
+    message('ota-msg', 'Upload failed: the monitor stopped answering.', true);
   });
   xhr.send(file);
 });
