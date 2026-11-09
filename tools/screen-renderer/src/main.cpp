@@ -82,7 +82,8 @@ Settings
 
 Network and updates
   wifi searching | connecting SSID | connected [SSID] [RSSI] | failed SSID [REASON]
-  saved [SSID...]                     the saved networks (none: not set up)
+  saved [SSID...]                     the saved networks, newest first, 5 at most
+                                      (none: not set up)
   setup off|waiting|joined|testing [SSID]|succeeded|failed [MESSAGE]
   ha off|waiting|connecting|connected|failed [ERROR]
   fixed-ip on|off                     whether the network in use has a fixed address
@@ -201,11 +202,13 @@ bool parseSwitch(const std::string& s, bool& on) {
   return true;
 }
 
-/// @brief Adds a network to the saved ones, first, unless it's there already.
+/// @brief Adds a network to the saved ones, first, unless it's there already;
+/// as on the device, the oldest goes when there are too many.
 /// @param ssid The network's name.
 void remember(const std::string& ssid) {
   auto& saved = world.wifi.saved;
   if (std::find(saved.begin(), saved.end(), ssid) == saved.end()) saved.insert(saved.begin(), ssid);
+  if (saved.size() > WifiStore::kCapacity) saved.resize(WifiStore::kCapacity);  // the oldest goes
 }
 
 /// One command from a script.
@@ -553,6 +556,7 @@ class Runner {
       return "";
     }
     if (command == "saved") {
+      if (n > static_cast<int>(WifiStore::kCapacity)) return "expected: saved [SSID...] (5 at most)";
       wifi.saved.assign(words.begin() + 1, words.end());
       return "";
     }
