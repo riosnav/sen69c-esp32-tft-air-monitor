@@ -84,6 +84,25 @@ const wifi_ap_record_t* scanRecord(int i) {
   return static_cast<const wifi_ap_record_t*>(WiFi.getScanInfoByIndex(i));
 }
 
+/// @brief Whether the monitor can join a network with this security: open,
+/// or WPA2 or WPA3 with a password.
+///
+/// The Arduino core refuses anything weaker than WPA2, so WEP and the first
+/// WPA never join; enterprise networks need more than a password.
+/// @param mode The security the network announces.
+bool joinable(wifi_auth_mode_t mode) {
+  switch (mode) {
+    case WIFI_AUTH_OPEN:
+    case WIFI_AUTH_WPA2_PSK:
+    case WIFI_AUTH_WPA_WPA2_PSK:
+    case WIFI_AUTH_WPA3_PSK:
+    case WIFI_AUTH_WPA2_WPA3_PSK:
+      return true;
+    default:
+      return false;
+  }
+}
+
 }  // namespace
 
 void WifiService::begin(Settings& settings) {
@@ -203,6 +222,7 @@ void WifiService::collectScan(int16_t count) {
   for (int i = 0; i < count; ++i) {
     const wifi_ap_record_t* ap = scanRecord(i);
     if (ap == nullptr || ap->ssid[0] == 0) continue;  // hidden network
+    if (!joinable(ap->authmode)) continue;  // offered, it would only fail
     const char* name = reinterpret_cast<const char*>(ap->ssid);
     const auto end = scanned_.begin() + scannedCount_;
     const auto same = std::find_if(scanned_.begin(), end, [name](const ScannedNetwork& s) {
