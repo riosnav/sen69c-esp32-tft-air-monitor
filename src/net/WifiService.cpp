@@ -177,6 +177,11 @@ void WifiService::updateMode(uint32_t nowMs) {
   if (want == mode_) return;
   mode_ = want;
   if (want == WIFI_MODE_NULL) {
+    // mDNS starts afresh on the next connection, on the network as it is then.
+    if (mdnsStarted_) {
+      MDNS.end();
+      mdnsStarted_ = false;
+    }
     WiFi.mode(WIFI_OFF);
     state_ = WifiState::Off;
     ssid_[0] = '\0';
