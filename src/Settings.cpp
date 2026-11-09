@@ -8,7 +8,9 @@
 
 #include <Preferences.h>
 
+#include <algorithm>
 #include <cmath>
+#include <iterator>
 
 #include "Device.h"
 
@@ -17,6 +19,25 @@ namespace settings {
 namespace {
 constexpr const char* kNamespace = "settings";  ///< The NVS namespace for all of it.
 constexpr size_t kWebPasswordLength = 8;  ///< The random web password's length.
+/// @brief Puts back the default of any setting outside the range the menu and
+/// the web page allow, e.g. one saved by a firmware version with more choices.
+/// @param[in,out] s The settings.
+void keepInRange(Settings& s) {
+  const Settings defaults;
+  if (s.brightness < 10 || s.brightness > 100) s.brightness = defaults.brightness;
+  if (std::find(std::begin(kDimOptionsS), std::end(kDimOptionsS), s.dimAfterS) ==
+      std::end(kDimOptionsS)) {
+    s.dimAfterS = defaults.dimAfterS;
+  }
+  if (static_cast<uint8_t>(s.led) > static_cast<uint8_t>(LedMode::Bright)) s.led = defaults.led;
+  if (static_cast<uint8_t>(s.silence) > static_cast<uint8_t>(Silence::All)) {
+    s.silence = defaults.silence;
+  }
+  if (!(std::fabs(s.tempOffsetC) <= 10)) s.tempOffsetC = defaults.tempOffsetC;  // NaN too
+  if (s.altitudeM > 3000) s.altitudeM = defaults.altitudeM;
+  if (s.mqttPort == 0) s.mqttPort = defaults.mqttPort;
+}
+
 }  // namespace
 
 Settings load() {
@@ -44,6 +65,7 @@ Settings load() {
     if (p.isKey("mqttPass")) p.getString("mqttPass", s.mqttPassword, sizeof s.mqttPassword);
     p.end();
   }
+  keepInRange(s);
   if (!hasPassword) {
     // First start, or after a factory reset.
     device::randomPassword(s.webPassword, kWebPasswordLength);
@@ -54,7 +76,10 @@ Settings load() {
 
 void save(const Settings& s) {
   Preferences p;
-  if (!p.begin(kNamespace, false)) return;
+  if (!p.begin(kNamespace, false)) {
+    Serial.println("Settings: could not save them");
+    return;
+  }
   p.putUChar("bright", s.brightness);
   p.putUShort("dim", s.dimAfterS);
   p.putBool("idleOff", s.screenOffWhenIdle);
