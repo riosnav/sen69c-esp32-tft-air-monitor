@@ -77,7 +77,7 @@ shot editing.png
 
 The `page`, `menu`, `trend` and `dismiss` commands press the buttons like a
 person would, and the firmware's own button logic sees every press. Time is
-simulated, so `wait 10m` takes no real time. The gallery's 70 screens take
+simulated, so `wait 10m` takes no real time. The gallery's 74 screens take
 under a second, and come out the same on every system.
 
 ## How it works

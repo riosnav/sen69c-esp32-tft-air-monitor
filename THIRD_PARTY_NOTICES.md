@@ -2,7 +2,7 @@
 
 The firmware is built from the following third-party components. Each is used under its own
 license, all of which are compatible with this project's GPL-3.0-or-later license. The full license
-texts ship with each component's source, which the build downloads; release binaries will include them.
+texts ship with each component's source, which the build downloads. Releases come as source only.
 
 | Component | Version | License | Source |
 |---|---|---|---|

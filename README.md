@@ -170,10 +170,10 @@ seasonal temperature and humidity ranges.
 PM1 and PM4 have no limits and are shown for information. A level only drops back once the value is a little
 inside the limit again, so readings near a limit don't flicker. The overall level is the worst of them.
 
-When a value turns Fair or Poor, a pop-up names it and the screen comes on. It closes with any button, or by itself
-after a minute, and the same value only alerts again if it gets worse. While a Poor alert is showing, the LED blinks
-red. *Silence* (below) keeps alerts from turning the screen on, e.g. at night: they wait on the screen until a
-button wakes it.
+When a value turns Fair or Poor, a pop-up names it and the screen comes on. It closes with a short press of any
+button, or by itself after a minute on screen, and the same value only alerts again if it gets worse. While a Poor
+alert is showing, the LED blinks red. *Silence* (below) keeps some or all alerts from turning the screen on, e.g.
+at night: they wait on the screen until a button wakes it.
 
 ### Accuracy
 
@@ -199,8 +199,8 @@ in memory and start over after a restart or update (the web page can download th
 
 | Setting | What it does |
 |---|---|
-| Brightness, Dim after, Idle screen, Units, Status LED | Screen brightness; when the screen dims, and whether it dims or switches off then (the sensor keeps measuring, and a button press or an alert wakes it); °C or °F; and how bright the colour LED is (or off). |
-| Silence | Keeps the monitor dark, e.g. at night. *Warnings*: only Poor alerts turn the screen on; *All*: no alert does. Either way the screen switches off when idle, instead of dimming (after the *Dim after* time, or 2 minutes if that's *Never*), and the LED stays off, except while a Poor alert is showing with *Warnings*. Home Assistant can switch it, e.g. at bedtime and in the morning. |
+| Brightness, Dim after, Idle screen, Units, Status LED | Screen brightness; when the screen dims, and whether it dims or switches off then (the sensor keeps measuring, and a button press or an alert wakes it, unless silenced); °C or °F; and how bright the colour LED is (or off). |
+| Silence | Keeps the monitor dark, e.g. at night. *Warnings*: only Poor alerts and a very low battery turn the screen on; *All*: no alert does. Either way the screen switches off when idle, instead of dimming (after the *Dim after* time, or 2 minutes if that's *Never*), and the LED stays off, except while a Poor alert is showing with *Warnings*. Home Assistant can switch it, e.g. at bedtime and in the morning. |
 | Wi-Fi | Turns Wi-Fi on or off. |
 | Set up Wi-Fi | Adds a network from a phone (see below). |
 | Forget Wi-Fi | Deletes every saved network. |
@@ -213,7 +213,7 @@ in memory and start over after a restart or update (the web page can download th
 | Heat humidity sensor | Heats the humidity sensor for a second. After a long time in very humid air (a bathroom, a damp cellar) the humidity reads too high; this fixes it. Readings pause for about a minute. |
 | Restart VOC learning | The VOC and NOₓ indices compare the air with what they have learned over the last hours. This makes them start afresh, e.g. after moving the monitor to a room with different air, as unplugging it would: readings pause for about a minute, then the indices relearn over about 12 hours. CO₂ calibrations are kept. |
 | Restart | Restarts the monitor. |
-| Power off | Switches the monitor off, e.g. to carry it around on its battery. The screen shows how to turn it on again for 10 s: hold **D1** or **D2** for 2 s; USB power alone doesn't. Switched off, it still draws a little current (not measured yet), so unplug the battery if it won't be used for weeks. |
+| Power off | Switches the monitor off, e.g. to carry it around on its battery. The screen shows how to turn it on again for 10 s: hold **D1** or **D2** for 2 s; USB power alone doesn't. The countdown can't be cancelled. Switched off, it still draws a little current, so a connected battery slowly runs down: unplug it if the monitor won't be used for weeks. |
 | Factory reset | Erases all settings, saved Wi-Fi networks, the web password and the Home Assistant settings. |
 
 If a LiPo battery is connected, the monitor notices by itself within about 2 minutes. (Without one, the board's
@@ -225,13 +225,14 @@ battery gauge reads the charger instead; the monitor tells the two apart.) With 
 - While the monitor runs on battery, a pop-up warns when the battery is low and again when it's very low, and the
   web page shows a banner: at 20 % and 10 %, or earlier if the voltage shows it running out sooner.
 - At about 3.5 V the monitor switches itself off: below that, the board can't give the sensor the voltage it needs,
-  and the readings would be wrong. Once USB power is back it starts again by itself within 5 minutes; D1 or D2
-  starts it at once.
+  and the readings would be wrong. Once USB power is back it starts again by itself within 5 minutes. D1 or D2
+  starts it sooner, as soon as the monitor can tell USB power is back, up to a minute after plugging in; until
+  then they show why it can't start.
 - The charge shown counts down to that point. Running the monitor, a small battery reaches 3.5 V while the gauge
   still reads about 20 %. So the first time the monitor switches itself off, it remembers where "empty" is for its
   battery, and from then on 0 % means it's about to switch off. Until then, e.g. with a new battery, it shows the
   gauge's own percentage.
-- The monitor draws about 250–300 mA: a full 400 mAh battery ran it for 1¼ hours, so expect about 3 hours from
+- The monitor draws about 250–300 mA, so a full battery lasts about 1¼ hours for 400 mAh, or about 3 hours for
   1000 mAh.
 
 ## Wi-Fi and the web page
@@ -248,7 +249,8 @@ battery gauge reads the charger instead; the monitor tells the two apart.) With 
 
 Notes:
 
-- Only 2.4 GHz networks work (an ESP32-S3 limitation).
+- Only 2.4 GHz networks work (an ESP32-S3 limitation), with WPA2 or WPA3, or no password. Networks with the older
+  WEP or WPA aren't listed, since the monitor can't join them.
 - The monitor gets its address from the router (DHCP). To give it a fixed one on a network, use *IP address* next
   to that network on the web page; other networks still use DHCP. A router setting that always gives the monitor
   the same address (often called a DHCP reservation) does the same without this.
@@ -260,15 +262,19 @@ Notes:
 - The setup hotspot has a random password, shown on the screen. It closes 2 minutes after a successful setup, after
   10 minutes without use, or after 30 minutes at most.
 
-The web page shows the readings, trend charts and device status to anyone on your network. Changing settings,
+The web page shows the readings, trend charts and device status to anyone on your network, and so do the
+Wi-Fi and Home Assistant sections: the names of the saved networks, any fixed addresses, and the broker's address
+and user name (never a password). Changing settings,
 maintenance and firmware updates need the **web password**, shown on the monitor's Wi-Fi page (the page asks for
 it once per browser tab). A random one is created on first start; it can be changed or removed on the web page,
 and a factory reset creates a new one. The connection is plain HTTP, as is usual for devices on a home network, so
-don't reuse a valuable password.
+don't reuse a valuable password. The Wi-Fi and broker passwords are kept in the monitor's flash memory
+unencrypted, so someone with the monitor in hand can read them.
 
 Against guessing: after 3 wrong passwords in a row, the monitor refuses every password for a minute, then twice as
-long after each further miss, but never more than 15 minutes, so someone trying can't lock you out for longer. The
-*Device* page on the monitor and on the web page count the wrong passwords. And a firmware update only installs
+long after each further miss, up to 15 minutes at a time. Someone on your network who keeps sending wrong passwords
+can keep you out this way; restarting the monitor (*Restart* in its settings, or unplugging it) clears the count.
+The *Device* page on the monitor and on the web page count the wrong passwords. And a firmware update only installs
 once someone holds a button on the monitor itself, so even a stolen password isn't enough to replace the firmware.
 
 ![The web page: a card per value with its accuracy, and a trend chart of the last hour with the sensor's
@@ -310,6 +316,9 @@ To keep the monitor dark at night, add two automations (*Settings → Automation
 trigger and the action *Select: Select option* on the monitor's *Silence* with *All* (or *Warnings*); in the
 morning, the same with *Off*.
 
+Anyone who can publish to your broker can change *Silence* as well, so keep the broker for your own users, as
+the Mosquitto app does. The connection to the broker isn't encrypted (plain MQTT, as is usual on a home network).
+
 ## Updating the firmware
 
 Get the new version of the code (download it again and open the new folder in VS Code, or `git pull`) and build
@@ -329,7 +338,7 @@ chooser press Cmd+Shift+. (macOS) or Ctrl+H (Linux) to see it. Or, from a comman
 address (any user name works; on Windows type `curl.exe`):
 
 ```sh
-curl -u any:WEBPASSWORD --data-binary @.pio/build/feather_s3_reversetft/firmware.bin http://airmonitor-a1b2.local/api/ota
+curl -u any:WEBPASSWORD -H 'X-Requested-With: curl' --data-binary @.pio/build/feather_s3_reversetft/firmware.bin http://airmonitor-a1b2.local/api/ota
 ```
 
 and then hold a button on the monitor as above. The monitor restarts into the new firmware, which confirms itself once it has rejoined Wi-Fi. If it crashes
@@ -349,7 +358,7 @@ first, or can't rejoin within 5 minutes, the monitor goes back to the previous f
 | Home Assistant doesn't connect | The Wi-Fi page shows the reason, e.g. "HA: Wrong user name or password" or "HA: Can't reach the broker"; check the settings on the web page. |
 | Lost the web password | It is shown on the monitor's Wi-Fi page. |
 | "Too many wrong passwords" | Wait as long as the message says (15 minutes at most), then enter the password from the monitor's Wi-Fi page. |
-| Can't reach the monitor after giving it a fixed address | Its Wi-Fi page shows the address it uses. To go back to DHCP, choose *Forget Wi-Fi* in its settings and set up Wi-Fi again. |
+| Can't reach the monitor after giving it a fixed address | Its Wi-Fi page shows the address it uses: open the web page there and choose *IP address* next to the network, then *Automatic, from the router (DHCP)*. Or choose *Forget Wi-Fi* in its settings and set up Wi-Fi again. |
 | Start over | *Factory reset* in the settings. |
 
 ## For developers
@@ -402,7 +411,8 @@ The web page uses a small JSON API (`/api/state`, `/api/history?metric=co2&range
 ...), listed at the top of [src/net/Web.h](src/net/Web.h). Requests that change something (POST) need an
 `X-Requested-With` header with any value, e.g. `curl -H 'X-Requested-With: curl'`: it keeps other web sites from
 making your browser send changes. Metric names: `pm1 pm25 pm4 pm10 co2 hcho voc nox
-temp rh`. `/api/history.csv` has every value's 1-minute means for the last 7 days. The monitor has no clock, so
+temp rh`. History values are `null` where there was no reading. `/api/history.csv` has every value's 1-minute
+means for the last 7 days. The monitor has no clock, so
 its first column says how many seconds ago each minute started; the web page's download turns that into times.
 
 Over MQTT, with `<host>` the monitor's host name (e.g. `airmonitor-a1b2`): `<host>/state` carries all the values

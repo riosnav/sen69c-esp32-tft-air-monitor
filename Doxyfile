@@ -12,6 +12,8 @@ INPUT                  = README.md THIRD_PARTY_NOTICES.md src lib test
 USE_MDFILE_AS_MAINPAGE = README.md
 # Section links as GitHub makes them, e.g. #what-you-need.
 MARKDOWN_ID_STYLE      = GITHUB
+# The README's pictures.
+IMAGE_PATH             = docs
 FILE_PATTERNS          = *.h *.cpp
 RECURSIVE              = YES
 # Generated from web/ at build time.
