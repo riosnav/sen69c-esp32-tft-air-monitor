@@ -75,8 +75,9 @@ Settings
   setting silence off|warnings|all
   setting co2-self-calibration|wifi on|off
   setting web-password|name TEXT
-  battery VOLTS PERCENT [RATE] | none a battery reading (connects one); RATE in % per hour,
+  battery VOLTS PERCENT [RATE]        a battery reading (connects one); RATE in % per hour,
                                       negative while it runs the monitor (default 0)
+  battery none                        a battery that gives no reading
   battery off                         no battery connected
 
 Network and updates
