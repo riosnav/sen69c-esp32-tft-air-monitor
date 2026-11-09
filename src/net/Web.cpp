@@ -39,6 +39,12 @@ namespace web {
 namespace {
 
 constexpr size_t kMaxBodyBytes = 2048;   ///< The largest JSON request body, in bytes.
+/// @brief The deepest nesting a JSON request body may have.
+///
+/// The parser recurses for each level, and the server's task has an 8 KB
+/// stack: a small body nested a few hundred levels deep would overflow it.
+/// The API's requests need 2.
+constexpr int kMaxJsonDepth = 8;
 constexpr size_t kOtaChunkBytes = 4096;  ///< How much of an image is received at a time, in bytes.
 constexpr int kRecvRetries = 5;  ///< How often receiving may time out before a request fails.
 
@@ -340,10 +346,36 @@ esp_err_t sendAsset(httpd_req_t* req, const WebAsset& asset) {
   return httpd_resp_send(req, reinterpret_cast<const char*>(asset.data), asset.size);
 }
 
+/// @brief Whether JSON text nests no deeper than kMaxJsonDepth.
+/// @param text The text; it needn't be valid JSON.
+/// @param length Its length, in bytes.
+bool shallow(const char* text, size_t length) {
+  int depth = 0;
+  bool inString = false;
+  for (size_t i = 0; i < length; ++i) {
+    const char c = text[i];
+    if (inString) {
+      if (c == '\\') {
+        ++i;  // skips the escaped character
+      } else if (c == '"') {
+        inString = false;
+      }
+    } else if (c == '"') {
+      inString = true;
+    } else if (c == '{' || c == '[') {
+      if (++depth > kMaxJsonDepth) return false;
+    } else if (c == '}' || c == ']') {
+      --depth;
+    }
+  }
+  return true;
+}
+
 /// @brief Reads a JSON request body.
 /// @param req The request.
-/// @return The JSON; null if the body is empty, longer than kMaxBodyBytes,
-///   cut short or not JSON.
+/// @return The JSON object; null if the body is empty, longer than
+///   kMaxBodyBytes, cut short, nested deeper than kMaxJsonDepth, or not a JSON
+///   object.
 Json readJson(httpd_req_t* req) {
   if (req->content_len == 0 || req->content_len > kMaxBodyBytes) return nullptr;
   std::unique_ptr<char[]> body(new (std::nothrow) char[req->content_len + 1]);
@@ -357,7 +389,9 @@ Json readJson(httpd_req_t* req) {
     received += n;
   }
   body[received] = '\0';
-  return Json(cJSON_ParseWithLength(body.get(), received));
+  if (!shallow(body.get(), received)) return nullptr;
+  Json json(cJSON_ParseWithLength(body.get(), received));
+  return cJSON_IsObject(json.get()) ? std::move(json) : nullptr;
 }
 
 /// @brief The local address the request came in on.
