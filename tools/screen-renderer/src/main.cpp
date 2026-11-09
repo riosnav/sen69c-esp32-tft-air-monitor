@@ -450,6 +450,10 @@ class Runner {
     }
     if (command == "uptime") {
       if (n != 1 || !parseDuration(arg(1), ms) || ms < 10000) return "expected: uptime TIME (10s or more)";
+      // What's due at a time moves with the clock.
+      const uint32_t shift = ms - world.nowMs;
+      if (world.ota.deadlineMs != 0) world.ota.deadlineMs += shift;
+      if (world.busyUntilMs != 0) world.busyUntilMs += shift;
       world.nowMs = ms;
       sensor.measuringSinceMs = 5000;
       sim.fillHistory();
