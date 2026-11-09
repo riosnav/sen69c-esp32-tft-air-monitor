@@ -20,6 +20,16 @@ constexpr const char* kNamespace = "wifi";  ///< The NVS namespace.
 /// @return The prefix followed by the index.
 String key(const char* prefix, size_t i) { return String(prefix) + i; }
 
+/// The fields of a saved network, as key prefixes.
+constexpr const char* kFields[] = {"ssid", "pass", "hid", "ip", "mask", "gw", "dns"};
+
+/// @brief Removes a key if it's there (removing a missing one logs an error).
+/// @param p The open namespace.
+/// @param k The key.
+void removeKey(Preferences& p, const String& k) {
+  if (p.isKey(k.c_str())) p.remove(k.c_str());
+}
+
 }  // namespace
 
 void WifiStore::load() {
@@ -94,19 +104,34 @@ void WifiStore::clear() {
 
 void WifiStore::save() const {
   Preferences p;
-  if (!p.begin(kNamespace, false)) return;
-  p.clear();
-  p.putUChar("count", static_cast<uint8_t>(count_));
+  if (!p.begin(kNamespace, false)) {
+    Serial.println("Wi-Fi: could not save the networks");
+    return;
+  }
+  // Written over the old ones rather than after erasing them, so a power cut
+  // meanwhile leaves old networks, new ones or a mix, but never none. The
+  // count comes after the networks it counts, and what's no longer needed is
+  // removed last.
   for (size_t i = 0; i < count_; ++i) {
-    p.putString(key("ssid", i).c_str(), networks_[i].ssid);
-    p.putString(key("pass", i).c_str(), networks_[i].password);
-    p.putBool(key("hid", i).c_str(), networks_[i].hidden);
-    const FixedAddress& a = networks_[i].address;
-    if (!a.set()) continue;
-    p.putUInt(key("ip", i).c_str(), a.ip);
-    p.putUInt(key("mask", i).c_str(), a.subnet);
-    p.putUInt(key("gw", i).c_str(), a.gateway);
-    p.putUInt(key("dns", i).c_str(), a.dns);
+    const WifiCredentials& n = networks_[i];
+    p.putString(key("ssid", i).c_str(), n.ssid);
+    p.putString(key("pass", i).c_str(), n.password);
+    p.putBool(key("hid", i).c_str(), n.hidden);
+    const FixedAddress& a = n.address;
+    if (a.set()) {
+      p.putUInt(key("ip", i).c_str(), a.ip);
+      p.putUInt(key("mask", i).c_str(), a.subnet);
+      p.putUInt(key("gw", i).c_str(), a.gateway);
+      p.putUInt(key("dns", i).c_str(), a.dns);
+    } else {
+      for (const char* field : {"ip", "mask", "gw", "dns"}) removeKey(p, key(field, i));
+    }
+  }
+  if (p.putUChar("count", static_cast<uint8_t>(count_)) == 0) {
+    Serial.println("Wi-Fi: could not save the networks");
+  }
+  for (size_t i = count_; i < kCapacity; ++i) {
+    for (const char* field : kFields) removeKey(p, key(field, i));
   }
   p.end();
 }
