@@ -63,8 +63,14 @@ def generate(sources):
         "",
         "namespace web_assets {",
     ]
+    names = {}
     for path in sources:
         name = symbol(path)
+        if name in names:
+            # Both would become the same C++ name, and the build would fail
+            # with a less helpful message.
+            raise SystemExit(f"embed_web: {names[name].name} and {path.name} both make {name}; rename one")
+        names[name] = path
         # mtime=0 keeps the output identical between builds.
         data = gzip.compress(path.read_bytes(), compresslevel=9, mtime=0)
         lines.append(f"constexpr uint8_t {name}Data[] = {{")
