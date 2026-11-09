@@ -404,8 +404,9 @@ void WifiService::startSetup() {
     settings_->wifiEnabled = true;
     settings::save(*settings_);
   }
+  // From now on the phone decides what to try, not a scan already under way.
+  scanToConnect_ = false;
   if (state_ == WifiState::Connecting) {
-    // From now on the phone decides what to try.
     WiFi.disconnect();
     state_ = WifiState::Searching;
     ssid_[0] = '\0';
