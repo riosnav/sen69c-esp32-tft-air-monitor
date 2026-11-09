@@ -1069,9 +1069,12 @@ const char* parseNetwork(const cJSON* json, WifiCredentials& network) {
   if (ssid == nullptr || ssid[0] == '\0' || strlen(ssid) >= sizeof network.ssid) {
     return "Network name: 1 to 32 characters";
   }
+  // A WPA passphrase has 8 to 63 characters; 64 are taken as the key
+  // itself, in hex, and anything else that long never joins.
   const size_t length = strlen(password);
-  if (length != 0 && (length < 8 || length >= sizeof network.password)) {
-    return "Password: 8 to 64 characters, or none for an open network";
+  const bool hexKey = length == 64 && strspn(password, "0123456789abcdefABCDEF") == 64;
+  if (length != 0 && (length < 8 || (length > 63 && !hexKey))) {
+    return "Password: 8 to 63 characters (or a 64-digit hex key), or none for an open network";
   }
   strlcpy(network.ssid, ssid, sizeof network.ssid);
   strlcpy(network.password, password, sizeof network.password);
