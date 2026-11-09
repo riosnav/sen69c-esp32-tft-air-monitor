@@ -105,7 +105,7 @@ class Ota {
 
   const esp_partition_t* partition_ = nullptr;  ///< The slot the image goes to.
   esp_ota_handle_t handle_ = 0;  ///< The update being written; 0 if none.
-  size_t size_ = 0;              ///< The image's size, in bytes.
+  std::atomic<uint32_t> size_{0};  ///< The image's size, in bytes.
   std::atomic<OtaState> state_{OtaState::Idle};
   std::atomic<uint32_t> written_{0};     ///< How much has been written, in bytes.
   std::atomic<uint32_t> deadlineMs_{0};  ///< When confirming ends, as millis().

@@ -141,7 +141,8 @@ const char* Ota::fail(const char* reason) {
 }
 
 uint8_t Ota::percent() const {
-  return size_ == 0 ? 0 : static_cast<uint8_t>(static_cast<uint64_t>(written_.load()) * 100 / size_);
+  const uint32_t size = size_;  // set by the web server's task
+  return size == 0 ? 0 : static_cast<uint8_t>(static_cast<uint64_t>(written_.load()) * 100 / size);
 }
 
 uint32_t Ota::secondsLeft(uint32_t nowMs) const {
