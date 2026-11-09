@@ -440,14 +440,15 @@ void Ui::commitSettings() {
 void Ui::updateAlerts(uint32_t nowMs) {
   // Show the worst metric that is at warning or alarm and hasn't been
   // acknowledged at that level. Once a metric improves its acknowledgement is
-  // lowered too, so it alerts again if it gets worse.
+  // lowered too, so it alerts again if it gets worse. A value that's briefly
+  // unknown, e.g. while the sensor restarts, hasn't improved.
   bool found = false;
   aq::Metric metric = aq::Metric::Co2;
   aq::Level level = aq::Level::Good;
   for (aq::Metric m : aq::kPriority) {
     aq::Level& acknowledged = acknowledged_[aq::idx(m)];
     const aq::Level current = aq_->level(m);
-    if (current < acknowledged) acknowledged = current;
+    if (current != aq::Level::Unknown && current < acknowledged) acknowledged = current;
     if (aq_->thresholds(m).any() && current >= aq::Level::Warning && current > acknowledged &&
         current > level) {
       found = true;
