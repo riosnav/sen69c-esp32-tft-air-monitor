@@ -47,8 +47,11 @@ inline namespace v1 {
 
 /// LovyanGFX's clock: the simulated one (World::nowMs), in ms.
 unsigned long millis() { return world.nowMs; }
-/// LovyanGFX's clock in microseconds: millis() times 1000, so whole ms only.
-unsigned long micros() { return world.nowMs * 1000UL; }
+/// @brief LovyanGFX's clock in microseconds: millis() times 1000, so whole ms
+/// only.
+///
+/// It wraps at 32 bits, as on the ESP32, whatever the size of `unsigned long`.
+unsigned long micros() { return static_cast<uint32_t>(world.nowMs * 1000u); }
 /// Returns at once, as ::delay() does.
 void delay(unsigned long) {}
 /// Returns at once, as ::delay() does.
