@@ -67,10 +67,11 @@ Settings
   setting units c|f
   setting idle-screen dim|off
   setting led off|dim|bright
-  setting co2-self-calibration|battery|wifi on|off
+  setting co2-self-calibration|wifi on|off
   setting web-password|name TEXT
-  battery VOLTS PERCENT [RATE] | none a battery reading (turns battery on); RATE in % per
-                                      hour, negative while it runs the monitor (default 0)
+  battery VOLTS PERCENT [RATE] | none a battery reading (connects one); RATE in % per hour,
+                                      negative while it runs the monitor (default 0)
+  battery off                         no battery connected
 
 Network and updates
   wifi searching | connecting SSID | connected [SSID] [RSSI] | failed SSID [REASON]
@@ -421,8 +422,6 @@ class Runner {
         s.altitudeM = static_cast<uint16_t>(number);
       } else if (name == "co2-self-calibration" && parseSwitch(value, on)) {
         s.co2SelfCalibration = on;
-      } else if (name == "battery" && parseSwitch(value, on)) {
-        s.batteryInstalled = on;
       } else if (name == "wifi" && parseSwitch(value, on)) {
         s.wifiEnabled = on;
       } else if (name == "web-password") {
@@ -437,13 +436,17 @@ class Runner {
     if (command == "battery") {
       double percent = 0;
       double rate = 0;
+      if (n == 1 && lower(arg(1)) == "off") {
+        world.batteryConnected = false;
+        return "";
+      }
       if (n == 1 && lower(arg(1)) == "none") {
         number = percent = rate = NAN;
       } else if (n < 2 || n > 3 || !parseNumber(arg(1), number) || !parseNumber(arg(2), percent) ||
                  (n == 3 && !parseNumber(arg(3), rate))) {
-        return "expected: battery VOLTS PERCENT [RATE] | none";
+        return "expected: battery VOLTS PERCENT [RATE] | none | off";
       }
-      world.settings.batteryInstalled = true;
+      world.batteryConnected = true;
       sensor.batteryVolts = static_cast<float>(number);
       sensor.batteryPercent = static_cast<float>(percent);
       sensor.batteryRate = static_cast<float>(rate);

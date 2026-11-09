@@ -268,7 +268,8 @@ void Simulator::step() {
   history_->update(&world.sensor.measurement, now);
   // As the firmware's main loop does.
   const SensorSnapshot& s = world.sensor;
-  if (world.settings.batteryInstalled) {
+  if (world.batteryConnected) {
+    battery_.setPresent(true);  // the firmware takes a couple of minutes to notice
     battery_.update(s.batteryVolts, s.batteryPercent, s.batteryRate, now);
   } else {
     battery_ = power::BatteryWatch();

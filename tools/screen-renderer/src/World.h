@@ -35,6 +35,7 @@ struct World {
 
   Settings settings;
   SensorSnapshot sensor;
+  bool batteryConnected = false;  // the battery readings come from one
   std::string activity;  // sensor.activity points here
   uint32_t busyUntilMs = 0;
   std::string busyResult;

@@ -87,7 +87,7 @@ shot sensor/not-found.png
 sensor measuring
 battery 3.92 78
 shot sensor/battery.png
-setting battery off
+battery off
 
 # Running on battery (the last number is the charge rate, in % per hour)
 wait 5s
@@ -106,7 +106,7 @@ shot battery/5-device-very-low.png
 battery 3.48 3 -9
 wait 61s
 shot battery/6-empty.png
-setting battery off
+battery off
 power-on
 
 # The settings menu (it opens over the page showing, here the overview)
