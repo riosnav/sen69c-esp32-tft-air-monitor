@@ -39,12 +39,12 @@ struct SensorSnapshot {
   uint32_t sequence = 0;  ///< Increments with every new measurement, and when they are cleared.
   SensorState state = SensorState::Starting;  ///< What the sensor is doing.
   const char* activity = "";      ///< What the sensor is doing while Busy.
-  /// @brief millis() when the current measurement started.
+  /// @brief uptimeMs() when the current measurement started.
   ///
   /// For a measurement kept running across a restart of the ESP32, the
   /// restart: how long it ran before is unknown, so the 30 s before PM values
   /// count and the wait before a CO2 calibration start again.
-  uint32_t measuringSinceMs = 0;
+  uint64_t measuringSinceMs = 0;
   uint32_t deviceStatus = 0;      ///< SEN69C device status register (0 = no errors).
   int16_t lastError = 0;          ///< Last I2C/driver error, 0 if the last command worked.
   char product[32] = "";  ///< The sensor's product name; `""` until it's found.
@@ -238,7 +238,7 @@ class SensorService {
   SensirionI2cSen69c sen_;  ///< The SEN69C's driver.
   SensorConfig config_;  ///< The sensor settings in use.
   SensorState state_ = SensorState::Starting;
-  uint32_t startedMs_ = 0;  ///< millis() when the measurement last started.
+  uint64_t startedMs_ = 0;  ///< uptimeMs() when the measurement last started.
   uint32_t consecutiveErrors_ = 0;  ///< Failed reads in a row.
   bool gaugeAwake_ = false;  ///< The battery monitor's hibernation is off.
   uint32_t lastBatteryMs_ = 0;  ///< millis() when the battery monitor was last read.

@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <cstdarg>
 
+#include "Uptime.h"
+
 namespace {
 
 /// @brief The settings the sensor was last given (the altitude it confirmed,
@@ -328,7 +330,7 @@ bool SensorService::startMeasurement(bool resumeIfRunning) {
       if (remembered(pack(config_.altitudeM, config_.co2SelfCalibration))) {
         Serial.println("Sensor was already measuring; continuing");
         applyTemperatureOffset();
-        startedMs_ = millis();
+        startedMs_ = uptimeMs();
         {
           Lock lock(mutex_);
           shared_.measuringSinceMs = startedMs_;
@@ -371,7 +373,7 @@ bool SensorService::startMeasurement(bool resumeIfRunning) {
     return false;
   }
   applyTemperatureOffset();
-  startedMs_ = millis();
+  startedMs_ = uptimeMs();
   {
     Lock lock(mutex_);
     shared_.measuringSinceMs = startedMs_;
@@ -383,8 +385,8 @@ bool SensorService::startMeasurement(bool resumeIfRunning) {
 }
 
 void SensorService::stopMeasurement() {
-  uint32_t running = millis() - startedMs_;
-  if (running < kMinRunMs) wait(kMinRunMs - running);
+  const uint64_t running = uptimeMs() - startedMs_;
+  if (running < kMinRunMs) wait(kMinRunMs - static_cast<uint32_t>(running));
   sen_.stopMeasurement();  // waits the required 1.4 s itself
 }
 
@@ -438,7 +440,7 @@ void SensorService::handle(const Command& cmd) {
       restarted = startMeasurement(false);
       break;
     case CommandType::RecalibrateCo2: {
-      if (millis() - startedMs_ < kRecalibrationWarmupMs) {
+      if (uptimeMs() - startedMs_ < kRecalibrationWarmupMs) {
         setResult("Measure 3 min before calibrating");
         return;
       }
@@ -503,7 +505,7 @@ void SensorService::pollMeasurement() {
 
   using aq::Metric;
   aq::Measurement m;
-  if (millis() - startedMs_ >= kPmStartupMs) {
+  if (uptimeMs() - startedMs_ >= kPmStartupMs) {
     m[Metric::Pm1] = scaled(pm1, 10);
     m[Metric::Pm25] = scaled(pm25, 10);
     m[Metric::Pm4] = scaled(pm4, 10);

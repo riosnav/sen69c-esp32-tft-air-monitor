@@ -26,6 +26,7 @@
 #include "AppLock.h"
 #include "Device.h"
 #include "System.h"
+#include "Uptime.h"
 #include "net/Json.h"
 #include "ui/Ui.h"
 #include "web/WebAssets.h"
@@ -529,7 +530,7 @@ esp_err_t getState(httpd_req_t* req) {
     cJSON_AddStringToObject(r, "name", ctx.settings->name);
     cJSON_AddStringToObject(r, "host", device::hostname());
     cJSON_AddStringToObject(r, "version", FW_VERSION);
-    cJSON_AddNumberToObject(r, "uptime", now / 1000);
+    cJSON_AddNumberToObject(r, "uptime", static_cast<double>(uptimeMs() / 1000));
     cJSON_AddStringToObject(r, "resetReason", resetReasonId(esp_reset_reason()));
     cJSON_AddStringToObject(r, "units", ctx.settings->fahrenheit ? "F" : "C");
     cJSON_AddStringToObject(r, "overall", levelId(air.overall()));
@@ -554,7 +555,8 @@ esp_err_t getState(httpd_req_t* req) {
     snprintf(firmware, sizeof firmware, "%u.%u", s.firmwareMajor, s.firmwareMinor);
     cJSON_AddStringToObject(sensor, "firmware", firmware);
     if (s.state == SensorState::Measuring) {
-      cJSON_AddNumberToObject(sensor, "measuringFor", (now - s.measuringSinceMs) / 1000);
+      cJSON_AddNumberToObject(sensor, "measuringFor",
+                              static_cast<double>((uptimeMs() - s.measuringSinceMs) / 1000));
     } else {
       cJSON_AddNullToObject(sensor, "measuringFor");
     }

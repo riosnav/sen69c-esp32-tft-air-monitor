@@ -9,6 +9,7 @@
 
 #include <Arduino.h>
 #include <LovyanGFX.hpp>
+#include <esp_timer.h>
 
 #include "World.h"
 
@@ -29,6 +30,7 @@ bool activeLow[3] = {};
 
 uint32_t millis() { return world.nowMs; }
 uint32_t micros() { return world.nowMs * 1000; }
+int64_t esp_timer_get_time() { return static_cast<int64_t>(world.nowMs) * 1000; }
 void delay(uint32_t) {}
 
 void pinMode(uint8_t pin, uint8_t mode) {

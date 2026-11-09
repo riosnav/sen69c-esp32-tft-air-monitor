@@ -19,6 +19,7 @@
 #include "Text.h"
 #include "Theme.h"
 #include "Ui.h"
+#include "Uptime.h"
 #include "net/Web.h"
 
 using aq::Level;
@@ -135,8 +136,8 @@ String number(float value, unsigned int decimals) {
 /// then days and hours.
 /// @param ms The duration, in ms.
 /// @return The text.
-String duration(uint32_t ms) {
-  const uint32_t minutes = ms / 60000;
+String duration(uint64_t ms) {
+  const auto minutes = static_cast<uint32_t>(ms / 60000);
   if (minutes < 1) return "<1 min";
   if (minutes < 60) return String(minutes) + " min";
   const uint32_t hours = minutes / 60;
@@ -640,11 +641,11 @@ void Ui::drawDevice(uint32_t nowMs) {
     line("I2C error " + String(s.lastError), theme::kAlarm);
   } else if (s.state == SensorState::Measuring) {
     // Formaldehyde needs ~10 min after power-up to reach its specified accuracy.
-    const bool settling = nowMs - s.measuringSinceMs < 10 * 60000;
+    const bool settling = uptimeMs() - s.measuringSinceMs < 10 * 60000;
     line(settling ? "Sensor OK, HCHO settling" : "Sensor OK", theme::kGood);
   }
   if (s.state == SensorState::Measuring) {
-    line("Measuring " + duration(nowMs - s.measuringSinceMs), theme::kMuted);
+    line("Measuring " + duration(uptimeMs() - s.measuringSinceMs), theme::kMuted);
   }
   if (battery_->present()) {
     if (std::isnan(s.batteryVolts)) {
@@ -663,7 +664,7 @@ void Ui::drawDevice(uint32_t nowMs) {
       line(text, battery_->warning() != 0 ? theme::kWarning : theme::kMuted);
     }
   }
-  line("Uptime " + duration(nowMs) + ", v" FW_VERSION, theme::kMuted);
+  line("Uptime " + duration(uptimeMs()) + ", v" FW_VERSION, theme::kMuted);
   if (const uint32_t failures = web::failedLogins()) {
     line(String(failures) + (failures == 1 ? " wrong web password" : " wrong web passwords"),
          theme::kWarning);
