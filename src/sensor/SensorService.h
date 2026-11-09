@@ -111,11 +111,16 @@ class SensorService {
   void clearErrors();
   /// @brief Makes the battery monitor estimate the charge afresh from the
   /// voltage, as when it's first powered.
+  ///
+  /// Not queued: done within a fraction of a second, whatever the sensor is
+  /// doing.
   void restartBatteryGauge();
   /// @brief Before powering off: lets the battery monitor hibernate again and
   /// stops using the bus.
   ///
-  /// The sensor task stops for good.
+  /// Not queued: the sensor task gets there within a fraction of a second,
+  /// whatever the sensor is doing (a maintenance operation is left unfinished;
+  /// the power is about to go anyway), and then stops for good.
   /// @param timeoutMs How long to wait for the sensor task to get there, in
   ///   ms.
   void powerDown(uint32_t timeoutMs);
@@ -130,8 +135,6 @@ class SensorService {
     ResetCo2Calibration,  ///< resetCo2Calibration()
     RestartVocLearning,   ///< restartVocLearning()
     ClearErrors,          ///< clearErrors()
-    RestartBatteryGauge,  ///< restartBatteryGauge()
-    PowerDown,            ///< powerDown()
   };
   /// A command for the sensor task.
   struct Command {
@@ -147,8 +150,23 @@ class SensorService {
   /// runs the commands and reads the sensor and the battery monitor; never
   /// returns.
   ///
-  /// If the sensor stops answering, it looks for it again.
+  /// If the sensor stops answering, it looks for it again. The battery monitor
+  /// is read all the while, whatever the sensor is doing: the warnings and
+  /// switching off before the battery is empty depend on it.
   void run();
+  /// @brief Waits, while still reading the battery monitor and serving
+  /// restartBatteryGauge() and powerDown().
+  ///
+  /// For every wait longer than a moment, e.g. during a maintenance operation.
+  /// @param ms How long, in ms.
+  void wait(uint32_t ms);
+  /// @brief Waits while the sensor isn't measuring, like wait(), and answers
+  /// queued commands with "Sensor not found".
+  /// @param ms How long, in ms.
+  void idle(uint32_t ms);
+  /// @brief Serves restartBatteryGauge() and powerDown(), and reads the
+  /// battery monitor every kBatteryIntervalMs.
+  void serveGauge();
   /// @brief Reads the sensor's product name, serial number and firmware
   /// version into the snapshot.
   /// @return Whether the sensor answered.
@@ -206,6 +224,9 @@ class SensorService {
   uint32_t startedMs_ = 0;  ///< millis() when the measurement last started.
   uint32_t consecutiveErrors_ = 0;  ///< Failed reads in a row.
   bool gaugeAwake_ = false;  ///< The battery monitor's hibernation is off.
+  uint32_t lastBatteryMs_ = 0;  ///< millis() when the battery monitor was last read.
+  std::atomic<bool> gaugeRestartRequested_{false};  ///< restartBatteryGauge() was called.
+  std::atomic<bool> powerDownRequested_{false};  ///< powerDown() was called.
   std::atomic<bool> poweredDown_{false};  ///< The sensor task has done powerDown().
 
   mutable SemaphoreHandle_t mutex_ = nullptr;  ///< Guards shared_.

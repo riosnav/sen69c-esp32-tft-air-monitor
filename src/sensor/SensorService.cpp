@@ -9,6 +9,7 @@
 #include <Wire.h>
 #include <esp_attr.h>
 
+#include <algorithm>
 #include <cstdarg>
 
 namespace {
@@ -181,10 +182,10 @@ void SensorService::restartVocLearning() { send({CommandType::RestartVocLearning
 
 void SensorService::clearErrors() { send({CommandType::ClearErrors, {}, 0}); }
 
-void SensorService::restartBatteryGauge() { send({CommandType::RestartBatteryGauge, {}, 0}); }
+void SensorService::restartBatteryGauge() { gaugeRestartRequested_ = true; }
 
 void SensorService::powerDown(uint32_t timeoutMs) {
-  send({CommandType::PowerDown, {}, 0});
+  powerDownRequested_ = true;
   for (uint32_t start = millis(); !poweredDown_ && millis() - start < timeoutMs;) delay(10);
 }
 
@@ -198,34 +199,68 @@ void SensorService::run() {
   vTaskDelay(pdMS_TO_TICKS(kPowerUpMs));  // the STEMMA QT port was only just powered
   Wire.begin(SDA, SCL, 100000);           // the SEN6x supports 100 kHz at most
   sen_.begin(Wire, SEN69C_I2C_ADDR_6B);
+  lastBatteryMs_ = millis() - kBatteryIntervalMs;  // read it at once
 
   for (;;) {
     while (!identify()) {
       setState(SensorState::NotFound);
-      vTaskDelay(pdMS_TO_TICKS(kRetryMs));
+      idle(kRetryMs);
     }
     if (!startMeasurement(true)) {
-      vTaskDelay(pdMS_TO_TICKS(kRetryMs));
+      idle(kRetryMs);
       continue;
     }
     consecutiveErrors_ = 0;
     uint32_t lastStatus = millis();
-    uint32_t lastBattery = millis() - kBatteryIntervalMs;
     while (consecutiveErrors_ < kMaxConsecutiveErrors) {
       Command cmd;
       if (xQueueReceive(queue_, &cmd, pdMS_TO_TICKS(kPollMs)) == pdTRUE) handle(cmd);
       pollMeasurement();
+      serveGauge();
       uint32_t now = millis();
       if (now - lastStatus >= kStatusIntervalMs) {
         lastStatus = now;
         readDeviceStatus();
       }
-      if (now - lastBattery >= kBatteryIntervalMs) {
-        lastBattery = now;
-        readBattery();
-      }
     }
     Serial.println("Sensor stopped answering; looking for it again");
+  }
+}
+
+void SensorService::wait(uint32_t ms) {
+  for (uint32_t start = millis(), waited = 0; waited < ms; waited = millis() - start) {
+    serveGauge();
+    vTaskDelay(pdMS_TO_TICKS(std::min(ms - waited, kPollMs)));
+  }
+}
+
+void SensorService::idle(uint32_t ms) {
+  for (uint32_t start = millis(), waited = 0; waited < ms; waited = millis() - start) {
+    serveGauge();
+    Command cmd;
+    if (xQueueReceive(queue_, &cmd, pdMS_TO_TICKS(std::min(ms - waited, kPollMs))) == pdTRUE) {
+      if (cmd.type == CommandType::ApplyConfig) {
+        config_ = cmd.config;  // for the next start
+      } else {
+        setResult("Sensor not found");
+      }
+    }
+  }
+}
+
+void SensorService::serveGauge() {
+  if (powerDownRequested_) {
+    writeRegister16(kAddrMax17048, 0x0A, kGaugeHibernateDefault);
+    poweredDown_ = true;
+    vTaskSuspend(nullptr);  // until the power goes
+  }
+  if (gaugeRestartRequested_.exchange(false)) {
+    writeRegister16(kAddrMax17048, 0x06, 0x4000);  // MODE: QuickStart
+  }
+  const uint32_t now = millis();
+  if (now - lastBatteryMs_ >= kBatteryIntervalMs) {
+    lastBatteryMs_ = now;
+    readBattery();
   }
 }
 
@@ -313,7 +348,7 @@ bool SensorService::startMeasurement(bool resumeIfRunning) {
 
 void SensorService::stopMeasurement() {
   uint32_t running = millis() - startedMs_;
-  if (running < kMinRunMs) vTaskDelay(pdMS_TO_TICKS(kMinRunMs - running));
+  if (running < kMinRunMs) wait(kMinRunMs - running);
   sen_.stopMeasurement();  // waits the required 1.4 s itself
 }
 
@@ -330,7 +365,7 @@ bool SensorService::runHeater() {
   }
   if (sen_.activateShtHeater() != 0) return false;
   if (firmwareMajor < kHeaterReportsFromFirmware) {
-    vTaskDelay(pdMS_TO_TICKS(kHeaterBusyMs));
+    wait(kHeaterBusyMs);
   } else {
     int16_t rh = kUnknownI16;
     int16_t t = kUnknownI16;
@@ -342,7 +377,7 @@ bool SensorService::runHeater() {
       Serial.printf("Heater done: %.1f %%RH, %.1f C while hot\n", rh / 100.0f, t / 200.0f);
     }
   }
-  vTaskDelay(pdMS_TO_TICKS(kHeaterSettleMs));
+  wait(kHeaterSettleMs);
   return true;
 }
 
@@ -366,7 +401,7 @@ void SensorService::handle(const Command& cmd) {
       setState(SensorState::Busy, "Cleaning fan");
       stopMeasurement();
       if (sen_.startFanCleaning() == 0) {
-        vTaskDelay(pdMS_TO_TICKS(kFanCleaningMs));
+        wait(kFanCleaningMs);
         setResult("Fan cleaned");
       } else {
         setResult("Fan cleaning failed");
@@ -418,14 +453,6 @@ void SensorService::handle(const Command& cmd) {
       setResult(cleared ? "Sensor errors cleared" : "Could not clear the errors");
       return;
     }
-    case CommandType::RestartBatteryGauge:
-      writeRegister16(kAddrMax17048, 0x06, 0x4000);  // MODE: QuickStart
-      return;
-    case CommandType::PowerDown:
-      writeRegister16(kAddrMax17048, 0x0A, kGaugeHibernateDefault);
-      poweredDown_ = true;
-      vTaskSuspend(nullptr);  // until the power goes
-      return;
   }
   // If the sensor didn't come back, make run() look for it again.
   if (!restarted) consecutiveErrors_ = kMaxConsecutiveErrors;
