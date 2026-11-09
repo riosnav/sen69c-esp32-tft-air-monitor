@@ -159,6 +159,9 @@ void MqttService::begin(const Settings& settings, const WifiService& wifi,
   snprintf(configTopic_, sizeof configTopic_, "%s/device/%s/config", kDiscoveryPrefix,
            device::hostname());
   snprintf(silenceTopic_, sizeof silenceTopic_, "%s/silence/set", device::hostname());
+  // The broker drops a client when another connects with the same id, so it
+  // has the whole MAC address; the host name has only the last 4 digits.
+  snprintf(clientId_, sizeof clientId_, "airmonitor-%s", device::macId());
   // The client logs every failed attempt; state() and logChanges() say it once.
   esp_log_level_set("mqtt_client", ESP_LOG_NONE);
   esp_log_level_set("transport_base", ESP_LOG_NONE);
@@ -243,7 +246,7 @@ void MqttService::start() {
   config.broker.address.hostname = broker_.host;
   config.broker.address.port = broker_.port;
   config.broker.address.transport = MQTT_TRANSPORT_OVER_TCP;
-  config.credentials.client_id = device::hostname();
+  config.credentials.client_id = clientId_;
   if (broker_.user[0] != '\0') config.credentials.username = broker_.user;
   if (broker_.password[0] != '\0') config.credentials.authentication.password = broker_.password;
   config.session.keepalive = kKeepaliveS;

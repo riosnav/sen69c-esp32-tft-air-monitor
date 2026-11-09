@@ -118,7 +118,8 @@ class MqttService {
   char stateTopic_[48] = "";    ///< `<id>/state`.
   char statusTopic_[48] = "";   ///< `<id>/status`.
   char configTopic_[80] = "";   ///< `homeassistant/device/<id>/config`.
-  char silenceTopic_[48] = "";  ///< `<id>/silence/set`.
+  char silenceTopic_[48] = "";
+  char clientId_[24] = "";  ///< `airmonitor-` and the whole MAC address.  ///< `<id>/silence/set`.
 
   esp_mqtt_client_handle_t client_ = nullptr;
   Broker broker_;  ///< What client_ was started with.
