@@ -435,7 +435,7 @@ class Ui {
   size_t holdButton_ = 0;  ///< Which one.
   uint32_t holdStartMs_ = 0;  ///< Since when, as millis().
 
-  char toast_[48] = "";  ///< The toast's message (see showToast()).
+  char toast_[48] = "";  ///< The toast's message (see showToast()); empty when none shows.
   uint32_t toastUntilMs_ = 0;  ///< When it goes, as millis().
   /// SensorSnapshot::resultSequence of the last outcome shown, so each shows once.
   uint32_t resultSequence_ = 0;

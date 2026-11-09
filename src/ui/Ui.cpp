@@ -105,6 +105,10 @@ void Ui::update(const SensorSnapshot& snapshot, uint32_t nowMs) {
     resultSequence_ = snapshot.resultSequence;
     showToast(snapshot.result, nowMs);
   }
+  if (toast_[0] != '\0' && static_cast<int32_t>(nowMs - toastUntilMs_) >= 0) {
+    toast_[0] = '\0';  // its time is up
+    dirty_ = true;
+  }
   updateAlerts(nowMs);
   updatePrompt(nowMs);
   for (size_t i = 0; i < 3; ++i) {

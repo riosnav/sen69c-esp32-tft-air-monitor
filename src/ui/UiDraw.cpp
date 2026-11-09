@@ -310,7 +310,7 @@ void Ui::draw(uint32_t nowMs) {
     drawBatteryAlert();
     hints[0] = hints[1] = hints[2] = Hint::Cross;
   }
-  if (static_cast<int32_t>(toastUntilMs_ - nowMs) > 0) drawToast();
+  if (toast_[0] != '\0') drawToast();
   drawHints(hints[0], hints[1], hints[2]);
   frame_.pushSprite(0, 0);
 }
