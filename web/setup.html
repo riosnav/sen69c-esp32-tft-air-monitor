@@ -77,9 +77,23 @@ input[type=text], input[type=password] { font: inherit; padding: 10px 12px; bord
 </main>
 <script>
 'use strict';
+/**
+ * The first element that matches a CSS selector.
+ * @param {string} selector The selector.
+ * @returns {?Element} The element; null if none.
+ */
 const $ = (selector) => document.querySelector(selector);
+/** Failed polls in a row while waiting for the result (see waitForResult()). */
 let lostPolls = 0;
 
+/**
+ * Sends a request to the monitor: a POST of `body` as JSON, or a GET without
+ * one. Through the setup hotspot it needs no web password.
+ * @param {string} path The path, e.g. /api/wifi.
+ * @param {Object} [body] What to post.
+ * @returns {Promise<?Object>} The reply's JSON; null if it's empty.
+ * @throws {Error} The monitor's reason, if it turns the request down.
+ */
 async function request(path, body) {
   const options = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {};
   const response = await fetch(path, options);
@@ -88,8 +102,19 @@ async function request(path, body) {
   return text ? JSON.parse(text) : null;
 }
 
+/**
+ * How many signal bars a network gets.
+ * @param {number} rssi Its signal strength, in dBm.
+ * @returns {number} 1 to 4.
+ */
 const bars = (rssi) => (rssi >= -55 ? 4 : rssi >= -65 ? 3 : rssi >= -75 ? 2 : 1);
 
+/**
+ * Lists the networks found, strongest first as the monitor sends them: each a
+ * button that chooses it, with a lock if it needs a password, and its signal.
+ * Without any, says it's still looking or found none.
+ * @param {Object} w The /api/wifi reply.
+ */
 function showNetworks(w) {
   const list = $('#networks');
   if (w.networks.length === 0) {
@@ -114,6 +139,11 @@ function showNetworks(w) {
   }));
 }
 
+/**
+ * Loads the networks from /api/wifi and lists them, again every 1.5 s while
+ * the monitor is scanning; tries again every 2 s while it can't be reached.
+ * @returns {Promise<void>}
+ */
 async function refresh() {
   try {
     const w = await request('/api/wifi');
@@ -124,6 +154,14 @@ async function refresh() {
   }
 }
 
+/**
+ * Opens the form to join a network.
+ * @param {string} ssid The network's name; '' for one typed in.
+ * @param {boolean} secure Whether it needs a password, which shows the
+ *   password field.
+ * @param {boolean} manual Whether the name is typed in (Other network), which
+ *   also offers Hidden network.
+ */
 function choose(ssid, secure, manual) {
   const form = $('#join');
   form.hidden = false;
@@ -137,6 +175,11 @@ function choose(ssid, secure, manual) {
   form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
+/**
+ * Swaps the list of networks for the progress card.
+ * @param {string} title What's happening, in large type.
+ * @param {string} detail More about it.
+ */
 function showProgress(title, detail) {
   $('#pick').hidden = true;
   $('#progress').hidden = false;
@@ -146,6 +189,13 @@ function showProgress(title, detail) {
   $('#result').hidden = $('#again').hidden = $('#done').hidden = true;
 }
 
+/**
+ * Polls /api/wifi every second until the monitor has joined the network, has
+ * failed to, or the setup has ended, and shows how it went: on success, the
+ * monitor's addresses and the web password. Gives up after more than 40
+ * failed polls in a row.
+ * @returns {Promise<void>}
+ */
 async function waitForResult() {
   let w;
   try {

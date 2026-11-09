@@ -242,12 +242,33 @@ footer { color: var(--muted); font-size: 12px; margin-top: 30px; }
 </dialog>
 <script>
 'use strict';
+/**
+ * The first element that matches a CSS selector.
+ * @param {string} selector The selector.
+ * @param {ParentNode} [root=document] Where to look.
+ * @returns {?Element} The element; null if none.
+ */
 const $ = (selector, root = document) => root.querySelector(selector);
 
-// tol: the sensor's typical tolerance at a reading, from Sensirion's SEN6x datasheet (SEN69C). The
-// indices have none: in a room's usual air every sensor reads 100 (VOC) and 1 (NOx).
+/**
+ * The tolerance of a PM1 or PM2.5 reading (see METRICS).
+ * @param {number} v The reading, in µg/m³.
+ * @returns {number} The tolerance (±), in µg/m³.
+ */
 const fineDust = (v) => (v <= 100 ? 5 + 0.05 * v : 0.1 * v);  // PM1, PM2.5
+/**
+ * The tolerance of a PM4 or PM10 reading (see METRICS).
+ * @param {number} v The reading, in µg/m³.
+ * @returns {number} The tolerance (±), in µg/m³.
+ */
 const coarseDust = (v) => (v <= 100 ? 25 : 0.25 * v);  // PM4, PM10
+/**
+ * The values shown, in card order: `id` as in the API, `label`, the `unit` the
+ * monitor sends it in (°C for temperature), `dec` decimals shown, and `tol`,
+ * the sensor's typical tolerance at a reading, in that unit, from Sensirion's
+ * SEN6x datasheet (SEN69C). The indices have none: in a room's usual air every
+ * sensor reads 100 (VOC) and 1 (NOx).
+ */
 const METRICS = [
   { id: 'co2', label: 'CO₂', unit: 'ppm', dec: 0, tol: (v) => 100 + 0.1 * v },
   { id: 'pm1', label: 'PM1', unit: 'µg/m³', dec: 1, tol: fineDust },
@@ -260,10 +281,18 @@ const METRICS = [
   { id: 'temp', label: 'Temperature', unit: '°C', dec: 1, tol: () => 0.45 },
   { id: 'rh', label: 'Humidity', unit: '%', dec: 0, tol: () => 4.5 },
 ];
+/** The pill's text for each overall level, as /api/state names them. */
 const LEVELS = { good: 'GOOD', warning: 'FAIR', alarm: 'POOR', unknown: '…' };
-// Smallest span the chart zooms into, so sensor noise doesn't look like a trend.
+/**
+ * The smallest span the chart zooms into, in each value's unit as sent (°C for
+ * temperature), so sensor noise doesn't look like a trend.
+ */
 const MIN_SPAN = { co2: 100, pm25: 5, pm10: 5, hcho: 10, voc: 20, nox: 5, temp: 1, rh: 5, pm1: 5, pm4: 5 };
-// What each value is, why it matters, and where its limits come from (see the README).
+/**
+ * Each value's info, behind its (i) icon: what it is, why it matters (`risk`),
+ * where its limits come from (`basis`; see the README), and the sensor's
+ * `tolerance`.
+ */
 const INFO = {
   co2: {
     what: 'Carbon dioxide, breathed out by people. It shows how well the room is ventilated.',
@@ -326,33 +355,80 @@ const INFO = {
     tolerance: '±4.5 % from 30 to 70 % humidity, at 25 °C.',
   },
 };
-// Follows the tolerance in the info of the values that show one.
+/** Added to the tolerance in the info of the values that have one. */
 const STEADY = ' Much of it is a steady error of this particular sensor, so changes over time are more reliable than the value itself.';
 
+/** The latest /api/state reply; null until the first one. */
 let state = null;
-// hover: x (CSS px) of the pointer over the chart, or null.
+/**
+ * The chart: its value (`metric`, an id from METRICS) and `range` (hour, day
+ * or week); the /api/history reply (`data`, null while loading), to which
+ * loadChart() adds `at`, the time of its newest value; when that was loaded
+ * (`loadedAt`); and `hover`, x (CSS px) of the pointer over the chart, or
+ * null. Times are as Date.now().
+ */
 const chart = { metric: 'co2', range: 'hour', data: null, loadedAt: 0, hover: null };
 
+/**
+ * Whether temperatures show in °F, as set on the monitor.
+ * @returns {boolean}
+ */
 const fahrenheit = () => state !== null && state.units === 'F';
+/**
+ * A reading in the unit shown: temperatures in °F if set so, the rest as sent.
+ * @param {string} id The value's id, from METRICS.
+ * @param {?number} v The reading as sent (°C for temperature); null if none.
+ * @returns {?number} The reading in the unit shown; null if none.
+ */
 const convert = (id, v) => (v != null && id === 'temp' && fahrenheit() ? v * 9 / 5 + 32 : v);
+/**
+ * The unit shown for a value; '' for the indices.
+ * @param {Object} m The value, from METRICS.
+ * @returns {string}
+ */
 const unitOf = (m) => (m.id === 'temp' ? (fahrenheit() ? '°F' : '°C') : m.unit);
+/**
+ * A reading as its card shows it: in the unit shown, with the value's
+ * decimals; '--' if none.
+ * @param {Object} m The value, from METRICS.
+ * @param {?number} v The reading as sent; null if none.
+ * @returns {string}
+ */
 const format = (m, v) => (v == null ? '--' : convert(m.id, v).toFixed(m.dec));
-// The sensor's tolerance at reading v, in the units shown; null when there's none to show.
+/**
+ * The sensor's tolerance at a reading, in the unit shown.
+ * @param {Object} m The value, from METRICS.
+ * @param {?number} v The reading as sent; null if none.
+ * @returns {?number} The tolerance (±); null when there's none to show: no
+ *   reading, an index, or the tolerance option off.
+ */
 function toleranceOf(m, v) {
   if (v == null || !m.tol || !$('#tolerance').checked) return null;
   return m.tol(v) * (m.id === 'temp' && fahrenheit() ? 1.8 : 1);
 }
+/**
+ * A tolerance as shown: ± and two significant digits.
+ * @param {number} t The tolerance, in the unit shown.
+ * @returns {string}
+ */
 const formatTolerance = (t) => '±' + Number(t.toPrecision(2));
 
 // ---------------------------------------------------------------- requests
 
-// The web password. The page asks for it itself, since the browser's own prompt
-// would also ask for a user name, which doesn't matter; kept for this tab.
+/**
+ * The web password; null if not known. The page asks for it itself, since the
+ * browser's own prompt would also ask for a user name, which doesn't matter;
+ * kept for this tab.
+ */
 let webPassword = null;
 try {
   webPassword = sessionStorage.getItem('webPassword');
 } catch (e) { /* asked for again */ }
 
+/**
+ * Keeps the web password for this tab, or forgets it.
+ * @param {?string} password The password; null to forget it.
+ */
 function rememberPassword(password) {
   webPassword = password;
   try {
@@ -361,7 +437,13 @@ function rememberPassword(password) {
   } catch (e) { /* asked for again */ }
 }
 
-// X-Requested-With tells the monitor not to make the browser prompt for a password.
+/**
+ * The headers for a request to the monitor: the web password, if known, as
+ * basic auth with no user name, and X-Requested-With, which tells the monitor
+ * not to make the browser prompt for a password.
+ * @param {Object<string, string>} [extra={}] More headers.
+ * @returns {Object<string, string>}
+ */
 function apiHeaders(extra = {}) {
   const headers = { 'X-Requested-With': 'fetch', ...extra };
   if (webPassword !== null) {
@@ -371,6 +453,14 @@ function apiHeaders(extra = {}) {
   return headers;
 }
 
+/**
+ * Sends a request to the monitor, with apiHeaders().
+ * @param {string} path The path, e.g. /api/state.
+ * @param {RequestInit} [options={}] As for fetch().
+ * @returns {Promise<*>} The reply: parsed if it's JSON, else its text ('' if
+ *   none).
+ * @throws {Error} The monitor's reason, if it turns the request down.
+ */
 async function request(path, options = {}) {
   const response = await fetch(path, { ...options, headers: apiHeaders(options.headers) });
   const text = await response.text();
@@ -378,7 +468,11 @@ async function request(path, options = {}) {
   return text && (response.headers.get('Content-Type') || '').includes('json') ? JSON.parse(text) : text;
 }
 
-// Resolves to the password entered, or null if cancelled.
+/**
+ * Asks for the web password in the page's own dialog.
+ * @param {boolean} wrong Whether the last one was wrong, which the dialog says.
+ * @returns {Promise<?string>} The password entered; null if cancelled.
+ */
 function askPassword(wrong) {
   const dialog = $('#login');
   const input = $('input', dialog);
@@ -393,7 +487,14 @@ function askPassword(wrong) {
   });
 }
 
-// Makes sure the page has the web password, if one is set, asking for it as needed.
+/**
+ * Makes sure the page has the web password, if one is set, asking for it as
+ * needed until /api/auth accepts it.
+ * @returns {Promise<void>}
+ * @throws {Error} If the dialog is cancelled, if the monitor refuses
+ *   passwords for a while after too many wrong ones (with its reason), or if
+ *   it can't be reached.
+ */
 async function authorize() {
   let wrong = false;
   for (;;) {
@@ -411,27 +512,53 @@ async function authorize() {
   }
 }
 
+/**
+ * Sends a change or a command as JSON, after authorize().
+ * @param {string} path The path, e.g. /api/settings.
+ * @param {Object} body What to send.
+ * @returns {Promise<*>} The reply, as request() gives it.
+ * @throws {Error} As authorize() and request() do.
+ */
 async function post(path, body) {
   await authorize();
   return request(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 }
 
+/**
+ * Shows a message in one of the page's message lines.
+ * @param {string} id The line's element id.
+ * @param {string} text The message; '' clears it.
+ * @param {boolean} [error=false] Whether it's an error, shown in red.
+ */
 function message(id, text, error = false) {
   const el = $('#' + id);
   el.textContent = text;
   el.classList.toggle('error', error);
 }
 
-// The sensor's status bits that mean something is wrong (SEN6x datasheet).
+/**
+ * The sensor's status bits that mean something is wrong (SEN6x datasheet), as
+ * [bit, what it concerns].
+ */
 const STATUS_FLAGS = [[4, 'fan'], [21, 'fan speed'], [6, 'humidity/temperature'], [7, 'VOC/NOₓ'],
   [9, 'CO₂'], [12, 'CO₂'], [10, 'formaldehyde'], [11, 'particles']];
 
+/**
+ * What the sensor's device status says, for the Device card: what has an
+ * error, or else the value in hex.
+ * @param {number} value The device status, from /api/state `sensor.status`.
+ * @returns {string} E.g. 'error: fan'.
+ */
 function statusText(value) {
   const names = [...new Set(STATUS_FLAGS.filter(([bit]) => value & (1 << bit)).map(([, name]) => name))];
   return names.length ? `error: ${names.join(', ')}` : `device status 0x${value.toString(16)}`;
 }
 
-// Why the monitor last started: tells a restart on its own from a power cut.
+/**
+ * Why the monitor last started, for the Device card, by /api/state
+ * `resetReason` (anything else is Other); it tells a restart on its own from a
+ * power cut.
+ */
 const RESET_REASONS = {
   'power-on': 'Power on (plugged in, or the Reset button)',
   restart: 'Restart (menu, web page or update)',
@@ -442,6 +569,12 @@ const RESET_REASONS = {
   usb: 'Flashed over USB',
 };
 
+/**
+ * A duration as text, rounded down: in minutes, in hours and minutes, or, from
+ * 2 days on, in days and hours.
+ * @param {number} seconds The duration, in s.
+ * @returns {string} E.g. '3 h 5 min'; 'less than a minute' under 60 s.
+ */
 function duration(seconds) {
   const minutes = Math.floor(seconds / 60), hours = Math.floor(minutes / 60), days = Math.floor(hours / 24);
   if (minutes < 1) return 'less than a minute';
@@ -452,6 +585,11 @@ function duration(seconds) {
 
 // ---------------------------------------------------------------- readings
 
+/**
+ * Builds a card for each value in METRICS, and its entry in the chart's list.
+ * A click on a card (or Enter or Space) shows its value in the chart, and
+ * jumps there if that option is on; its (i) icon shows the value's info.
+ */
 function buildCards() {
   for (const m of METRICS) {
     const card = document.createElement('div');
@@ -495,10 +633,17 @@ function buildCards() {
 
 // ---------------------------------------------------------------- info
 
+/** The popup that shows a value's info. */
 const tip = $('#tip');
 let tipFor = null;  // the (i) icon whose info is open
 let tipPinned = false;  // opened by a click or tap rather than by hovering
 
+/**
+ * A value's warning and alarm limits, in the unit shown, for its info.
+ * @param {Object} m The value, from METRICS.
+ * @returns {string} A sentence, or one saying it has none; '' before the
+ *   first /api/state.
+ */
 function limitsText(m) {
   const d = state && state.metrics[m.id];
   if (!d) return '';
@@ -512,6 +657,13 @@ function limitsText(m) {
   return warning ? `Warning ${warning}. Alarm ${alarm}.` : 'No limit: shown for information.';
 }
 
+/**
+ * Shows a value's info by its (i) icon: what it is, why it matters, its limits,
+ * where they come from, and the sensor's tolerance.
+ * @param {HTMLElement} icon The icon; its `data-id` is the value's id.
+ * @param {boolean} pinned Whether it was opened by a click or tap, which keeps
+ *   it open until the next one; else it closes when the pointer leaves.
+ */
 function showInfo(icon, pinned) {
   const m = METRICS.find((x) => x.id === icon.dataset.id);
   const info = INFO[m.id];
@@ -542,6 +694,7 @@ function showInfo(icon, pinned) {
   tip.style.top = top + 'px';
 }
 
+/** Hides the info popup. */
 function hideInfo() {
   tip.hidden = true;
   tipFor = null;
@@ -559,10 +712,14 @@ document.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideInfo(); });
 window.addEventListener('scroll', hideInfo, { passive: true });
 
-// The tab's icon: a dot in the colour of the overall air quality.
+/** The tab's icon: a dot in the colour of the overall air quality, by level. */
 const FAVICON_COLORS = { good: '#3ccd6e', warning: '#ffb000', alarm: '#f54236', unknown: '#8b9099' };
 let faviconLevel = 'unknown';
 
+/**
+ * Colours the tab's icon for an air quality level, unless it already is.
+ * @param {string} level good, warning, alarm or unknown.
+ */
 function setFavicon(level) {
   if (level === faviconLevel) return;
   faviconLevel = level;
@@ -570,6 +727,10 @@ function setFavicon(level) {
   $('link[rel=icon]').href = 'data:image/svg+xml,' + encodeURIComponent(svg);
 }
 
+/**
+ * Shows the latest /api/state: the name, the overall level, the values, the
+ * battery warning, the Device card, the Home Assistant status and the version.
+ */
 function renderState() {
   const s = state;
   document.title = s.name;
@@ -629,6 +790,13 @@ function renderState() {
   $('#version').textContent = `Running v${s.version}.`;
 }
 
+/**
+ * Fetches /api/state and shows it, every 5 s for as long as the page is open.
+ * The chart reloads once its data is a step old (10 s, 1 min or 5 min), when
+ * the monitor has a new mean, and is redrawn otherwise. While the monitor
+ * can't be reached, a banner says so and the tab's icon turns grey.
+ * @returns {Promise<void>}
+ */
 async function poll() {
   try {
     state = await request('/api/state');
@@ -645,6 +813,12 @@ async function poll() {
 
 // ---------------------------------------------------------------- chart
 
+/**
+ * Shows a value in the chart: selects it in the list, marks its card, and
+ * loads its history.
+ * @param {string} id The value's id, from METRICS.
+ * @param {boolean} scroll Whether to scroll to the chart.
+ */
 function selectMetric(id, scroll) {
   chart.metric = id;
   chart.data = null;
@@ -656,6 +830,11 @@ function selectMetric(id, scroll) {
   if (scroll) $('#trend').scrollIntoView({ behavior: 'smooth' });
 }
 
+/**
+ * Loads the chart's value and range from /api/history and draws it; a reply
+ * for one no longer shown is dropped. If it fails, the next poll() tries again.
+ * @returns {Promise<void>}
+ */
 async function loadChart() {
   const { metric, range } = chart;
   try {
@@ -668,6 +847,12 @@ async function loadChart() {
   } catch (e) { /* the next poll retries */ }
 }
 
+/**
+ * Draws the chart in the unit shown, at the canvas's size: the grid, the times
+ * in this browser's time zone, the tolerance band, the warning and alarm
+ * limits in view, the data with gaps where there was none, and the readout at
+ * the pointer; and below it the latest, min, max and mean.
+ */
 function drawChart() {
   const canvas = $('#chart');
   const dpr = window.devicePixelRatio || 1;
@@ -844,9 +1029,12 @@ function drawChart() {
   g.fillText(text, bx + 7, top + 12);
 }
 
-// Every value of the last 7 days as a CSV file, a row per minute. The monitor
-// has no clock: it says how long ago each minute started, and this browser's
-// clock turns that into the time.
+/**
+ * Downloads every value of the last 7 days as a CSV file, a row per minute.
+ * The monitor has no clock: it says how long ago each minute started, and this
+ * browser's clock turns that into the time.
+ * @returns {Promise<void>}
+ */
 async function downloadHistory() {
   const button = $('#download');
   button.disabled = true;
@@ -875,6 +1063,10 @@ async function downloadHistory() {
 
 // ---------------------------------------------------------------- settings
 
+/**
+ * Fills the Display and sensor form from /api/settings.
+ * @returns {Promise<void>} Rejects if the monitor can't be reached.
+ */
 async function loadSettings() {
   const s = await request('/api/settings');
   const f = $('#settings').elements;
@@ -931,9 +1123,17 @@ $('#settings').addEventListener('submit', async (e) => {
 
 // ---------------------------------------------------------------- Wi-Fi
 
-// The last /api/wifi, for finding the monitor again after an address change.
+/**
+ * The last /api/wifi reply, for finding the monitor again after an address
+ * change.
+ */
 let lastWifi = null;
 
+/**
+ * Shows the Wi-Fi state and the saved networks from /api/wifi, each with
+ * buttons to set its IP address or forget it.
+ * @returns {Promise<void>} Rejects if the monitor can't be reached.
+ */
 async function loadWifi() {
   const w = await request('/api/wifi');
   lastWifi = w;
@@ -971,9 +1171,16 @@ async function loadWifi() {
   }));
 }
 
-// The fixed address form, for one saved network at a time.
+/** The name of the saved network the IP address form is open for. */
 let addressFor = null;
 
+/**
+ * Opens the IP address form for a saved network, filled in with its fixed
+ * address if it has one.
+ * @param {Object} network The network, from /api/wifi `saved`.
+ * @param {boolean} inUse Whether the monitor is connected to it, so a change
+ *   moves it and the page must follow (see followMonitor()).
+ */
 function editAddress(network, inUse) {
   const form = $('#address');
   const f = form.elements;
@@ -991,6 +1198,7 @@ function editAddress(network, inUse) {
   form.hidden = false;
 }
 
+/** Shows the fixed address fields only while Fixed address is chosen. */
 function showAddressFields() {
   $('#address-fields').hidden = $('#address').elements.mode.value !== 'fixed';
 }
@@ -1027,9 +1235,17 @@ $('#address').addEventListener('submit', async (e) => {
   }
 });
 
-// The monitor answers first and rejoins a second later at its new address:
-// wait until it answers at one of `targets` ({url, note}), then open this page
-// there. The message lists them as links, between `lead` and `tail`.
+/**
+ * Follows the monitor to its new address after a change to the network in
+ * use. It answers first and rejoins a second later, so this waits until it
+ * answers at one of `targets` (trying every 3 s, 30 times), then opens this
+ * page there. The message lists them as links, between `lead` and `tail`.
+ * @param {Array<{url: string, note: (string|undefined)}>} targets Where to
+ *   look: the page's URL, ending in /, and an optional note after its link.
+ * @param {string} lead The message before the links.
+ * @param {string} tail The message after them.
+ * @returns {Promise<void>}
+ */
 async function followMonitor(targets, lead, tail) {
   message('address-msg', lead);
   targets.forEach(({ url, note }, i) => {
@@ -1067,9 +1283,21 @@ $('#add-network').addEventListener('submit', async (e) => {
 
 // ---------------------------------------------------------------- Home Assistant
 
+/** The Home Assistant connection's states as text; mqttText() adds failed. */
 const MQTT_STATES = { off: 'off', waiting: 'waiting for Wi-Fi', connecting: 'connecting…', connected: 'connected' };
+/**
+ * The Home Assistant connection's state as text: once it failed, the error.
+ * @param {{state: string, error: string}} m The state, from /api/state `mqtt`
+ *   or from /api/mqtt.
+ * @returns {string}
+ */
 const mqttText = (m) => (m.state === 'failed' ? `${m.error}; trying again` : MQTT_STATES[m.state]);
 
+/**
+ * Fills the Home Assistant form from /api/mqtt and shows its state. The
+ * password isn't sent back: the field's placeholder says if one is set.
+ * @returns {Promise<void>} Rejects if the monitor can't be reached.
+ */
 async function loadMqtt() {
   const m = await request('/api/mqtt');
   const f = $('#mqtt').elements;
@@ -1098,6 +1326,12 @@ $('#mqtt').addEventListener('submit', async (e) => {
 
 // ---------------------------------------------------------------- maintenance
 
+/**
+ * Sends a maintenance command to /api/action, and says how it went.
+ * @param {Object} body The command, e.g. `{action: 'cleanFan'}`.
+ * @param {string} done The message once the monitor has taken it.
+ * @returns {Promise<void>}
+ */
 async function action(body, done) {
   try {
     await post('/api/action', body);
@@ -1168,7 +1402,12 @@ $('#upload').addEventListener('click', async () => {
   xhr.send(file);
 });
 
-// After the upload, the monitor waits for someone to hold one of its buttons.
+/**
+ * After the upload, the monitor waits for someone to hold one of its buttons:
+ * polls /api/ota every second and says how it goes. Once it's accepted, the
+ * page reloads 20 s later, when the monitor has restarted.
+ * @returns {Promise<void>}
+ */
 async function waitForConfirmation() {
   for (;;) {
     await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -1200,7 +1439,13 @@ async function waitForConfirmation() {
 
 // ---------------------------------------------------------------- start
 
-// View options, on unless turned off; remembered by this browser.
+/**
+ * Sets up a view option's checkbox: on unless turned off, and remembered by
+ * this browser.
+ * @param {string} id The checkbox's id.
+ * @param {string} key Its key in localStorage.
+ * @param {function(): void} [changed] Called when it changes.
+ */
 function viewOption(id, key, changed = () => {}) {
   const box = $('#' + id);
   try {
