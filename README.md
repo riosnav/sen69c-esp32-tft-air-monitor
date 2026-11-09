@@ -399,7 +399,9 @@ JavaScript has JSDoc comments.
 ### JSON API and MQTT topics
 
 The web page uses a small JSON API (`/api/state`, `/api/history?metric=co2&range=hour|day|week`, `/api/settings`,
-...), listed at the top of [src/net/Web.h](src/net/Web.h). Metric names: `pm1 pm25 pm4 pm10 co2 hcho voc nox
+...), listed at the top of [src/net/Web.h](src/net/Web.h). Requests that change something (POST) need an
+`X-Requested-With` header with any value, e.g. `curl -H 'X-Requested-With: curl'`: it keeps other web sites from
+making your browser send changes. Metric names: `pm1 pm25 pm4 pm10 co2 hcho voc nox
 temp rh`. `/api/history.csv` has every value's 1-minute means for the last 7 days. The monitor has no clock, so
 its first column says how many seconds ago each minute started; the web page's download turns that into times.
 

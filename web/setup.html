@@ -95,7 +95,8 @@ let lostPolls = 0;
  * @throws {Error} The monitor's reason, if it turns the request down.
  */
 async function request(path, body) {
-  const options = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {};
+  const headers = { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' };
+  const options = body ? { method: 'POST', headers, body: JSON.stringify(body) } : {};
   const response = await fetch(path, options);
   const text = await response.text();
   if (!response.ok) throw new Error(text || response.statusText);

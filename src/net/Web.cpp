@@ -302,6 +302,24 @@ esp_err_t badRequest(httpd_req_t* req, const char* reason) {
   return sendText(req, "400 Bad Request", reason);
 }
 
+/// @brief Whether a request comes from the monitor's own pages (or a script
+/// that says so), which mark theirs with an `X-Requested-With` header.
+///
+/// Another web site can make a visitor's browser send a form to the monitor,
+/// with the browser's saved password, but it can't add a header like this
+/// without asking the monitor first, which it never allows. So requests that
+/// change something must have it.
+/// @param req The request.
+bool fromPage(httpd_req_t* req) { return httpd_req_get_hdr_value_len(req, "X-Requested-With") > 0; }
+
+/// @brief Answers 403 to a request that changes something without the
+/// `X-Requested-With` header (see fromPage()).
+/// @param req The request.
+/// @return ESP_OK, or an error to close the connection.
+esp_err_t notFromPage(httpd_req_t* req) {
+  return sendText(req, "403 Forbidden", "Requests that change something need an X-Requested-With header.");
+}
+
 /// @brief Answers 204 No Content: done.
 /// @param req The request.
 /// @return ESP_OK, or an error to close the connection.
@@ -869,6 +887,7 @@ const char* parseSettings(const cJSON* json, Settings& s) {
 /// @param req The request.
 /// @return ESP_OK, or an error to close the connection.
 esp_err_t postSettings(httpd_req_t* req) {
+  if (!fromPage(req)) return notFromPage(req);
   if (!authorized(req)) return refuse(req);
   const Json json = readJson(req);
   if (!json) return badRequest(req, "Expected a JSON object");
@@ -898,6 +917,7 @@ esp_err_t postSettings(httpd_req_t* req) {
 /// @param req The request.
 /// @return ESP_OK, or an error to close the connection.
 esp_err_t postAction(httpd_req_t* req) {
+  if (!fromPage(req)) return notFromPage(req);
   if (!authorized(req)) return refuse(req);
   const Json json = readJson(req);
   const char* action = json ? stringField(json.get(), "action") : nullptr;
@@ -1095,6 +1115,7 @@ const char* wifiAction(const char* action, const cJSON* json) {
 /// @param req The request.
 /// @return ESP_OK, or an error to close the connection.
 esp_err_t postWifi(httpd_req_t* req) {
+  if (!fromPage(req)) return notFromPage(req);
   if (!authorized(req)) return refuse(req);
   const Json json = readJson(req);
   const char* action = json ? stringField(json.get(), "action") : nullptr;
@@ -1185,6 +1206,7 @@ const char* parseMqtt(const cJSON* json, Settings& s) {
 /// @param req The request.
 /// @return ESP_OK, or an error to close the connection.
 esp_err_t postMqtt(httpd_req_t* req) {
+  if (!fromPage(req)) return notFromPage(req);
   if (!authorized(req)) return refuse(req);
   const Json json = readJson(req);
   if (!json) return badRequest(req, "Expected a JSON object");
@@ -1232,6 +1254,7 @@ esp_err_t getOta(httpd_req_t* req) {
 /// @param req The request.
 /// @return ESP_OK, or an error to close the connection, e.g. when it was lost.
 esp_err_t postOta(httpd_req_t* req) {
+  if (!fromPage(req)) return notFromPage(req);
   if (!authorized(req)) return refuse(req);
   if (const char* error = ctx.ota->start(req->content_len)) return badRequest(req, error);
   std::unique_ptr<uint8_t[]> buffer(new (std::nothrow) uint8_t[kOtaChunkBytes]);
