@@ -29,10 +29,15 @@ endif()
 set(LOVYANGFX_DIR "" CACHE PATH "A LovyanGFX 1.2.33 already on disk (optional)")
 if(NOT LOVYANGFX_DIR)
   include(FetchContent)
+  # Only CMake 3.24 and later know this option (and warn without it).
+  set(extract_timestamp "")
+  if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.24)
+    set(extract_timestamp DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+  endif()
   FetchContent_Declare(lovyangfx_source
     URL https://github.com/lovyan03/LovyanGFX/archive/refs/tags/1.2.33.tar.gz
     URL_HASH SHA256=17f70bdd5ec21965be7de0a3622ead9e9ce6a73590ecf8ef58ece057b5e87070
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    ${extract_timestamp}
     SOURCE_SUBDIR none)  # sources only, without LovyanGFX's own CMake setup
   FetchContent_MakeAvailable(lovyangfx_source)
   set(LOVYANGFX_DIR "${lovyangfx_source_SOURCE_DIR}")
