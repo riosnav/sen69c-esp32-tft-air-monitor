@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+/// @file
+/// @brief The simulated device's starting state, its air presets and its
+/// sensor operations (see World.h).
+
 #include "World.h"
 
 #include <cmath>

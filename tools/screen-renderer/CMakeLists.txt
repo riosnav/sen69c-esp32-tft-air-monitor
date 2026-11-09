@@ -4,10 +4,17 @@
 # code and LovyanGFX for the desktop, with stand-ins for the ESP32 parts
 # (shim/). Works with Visual Studio's compiler on Windows (build.ps1 sets it
 # up) and with GCC or Clang on Linux (build.sh).
+#
+# The build scripts configure and build it; see README.md. By hand:
+#   cmake -S tools/screen-renderer -B <build folder> -DCMAKE_BUILD_TYPE=Release
+#   cmake --build <build folder>
+# Options: FIRMWARE_DIR (the firmware, by default this repository) and
+# LOVYANGFX_DIR (see below).
 
 cmake_minimum_required(VERSION 3.20)
 project(screen_renderer LANGUAGES C CXX)
 
+# C++20: src/Simulator.cpp uses constinit and std::construct_at().
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -42,6 +49,10 @@ if(NOT FW_VERSION)
   set(FW_VERSION "dev")
 endif()
 
+# MSVC: read the sources as UTF-8 (LovyanGFX's comments are partly in
+# Japanese), set __cplusplus to the real standard (LovyanGFX checks it; MSVC
+# otherwise reports C++98), allow object files with many sections, and don't
+# warn about the C library functions it deems unsafe (fopen, sprintf...).
 if(MSVC)
   add_compile_options(/utf-8 /Zc:__cplusplus /bigobj)
   add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
@@ -64,6 +75,8 @@ foreach(header IN LISTS cjk_headers)
     string(APPEND content "const uint8_t ${name}[1] = {0};\n")
   endforeach()
 endforeach()
+# Unlike file(WRITE), file(CONFIGURE) leaves the file alone when its content
+# hasn't changed, so it isn't compiled again at every configure.
 file(CONFIGURE OUTPUT "${font_placeholders}" CONTENT "${content}" @ONLY)
 
 add_library(lovyangfx STATIC
@@ -77,9 +90,13 @@ add_library(lovyangfx STATIC
   "${lgfx}/utility/lgfx_qrcode.c"
   "${lgfx}/utility/lgfx_tjpgd.c"
   "${font_placeholders}")
+# shim/ comes first: its LovyanGFX.hpp, not the library's own, is the one the
+# firmware's code includes.
 target_include_directories(lovyangfx PUBLIC shim "${LOVYANGFX_DIR}/src")
+# Selects LovyanGFX's SDL back end (see shim/SDL.h).
 target_compile_definitions(lovyangfx PUBLIC LGFX_SDL)
-# Third-party code: no warnings.
+# Third-party code: no warnings. With MSVC, /FI includes shim/msvc_compat.h
+# first in each of its files.
 if(MSVC)
   target_compile_options(lovyangfx PRIVATE /w "/FI${CMAKE_CURRENT_SOURCE_DIR}/shim/msvc_compat.h")
 else()

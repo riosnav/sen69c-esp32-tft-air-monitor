@@ -1,5 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+/// @file
+/// @brief Running the firmware's UI on the simulated device, and pressing its
+/// buttons until it shows a page, menu item or trend (see Simulator.h).
+///
+/// To know what shows, it reads private members of Ui. Only the explicit
+/// template instantiation at the end of this file names them, so if the
+/// firmware renames one, that's the one place to update.
+
 #include "Simulator.h"
 
 #include <algorithm>
@@ -15,30 +23,41 @@ using aq::Metric;
 
 namespace {
 
-// What the simulator does with the UI's private parts: tell which page or
-// menu item shows, and read the frame. Only an explicit template
-// instantiation may name private members, so this code lives in the
-// template `Inside` below, and its one instantiation (at the end of the file)
-// fills in these hooks.
+/// @brief What the simulator does with the UI's private parts: tell which page
+/// or menu item shows, and read the frame.
+///
+/// Only an explicit template instantiation may name private members, so this
+/// code lives in the template `Inside` below, and its one instantiation (at
+/// the end of the file) fills in these hooks.
 struct Hooks {
-  LGFX_Sprite& (*frame)(Ui&) = nullptr;
-  bool& (*dirty)(Ui&) = nullptr;
-  std::string (*dismissAlerts)(Simulator&, Ui&) = nullptr;
-  std::string (*goToPage)(Simulator&, Ui&, const std::string&) = nullptr;
-  std::string (*openMenu)(Simulator&, Ui&, const std::string&) = nullptr;
-  std::string (*showTrend)(Simulator&, Ui&, Metric) = nullptr;
-  std::vector<std::string> (*pageNames)() = nullptr;
-  std::vector<std::string> (*itemNames)() = nullptr;
+  LGFX_Sprite& (*frame)(Ui&) = nullptr;                     ///< Inside::frame().
+  bool& (*dirty)(Ui&) = nullptr;                            ///< Inside::dirty().
+  std::string (*dismissAlerts)(Simulator&, Ui&) = nullptr;  ///< Inside::dismissAlerts().
+  std::string (*goToPage)(Simulator&, Ui&, const std::string&) = nullptr;  ///< Inside::goToPage().
+  std::string (*openMenu)(Simulator&, Ui&, const std::string&) = nullptr;  ///< Inside::openMenu().
+  std::string (*showTrend)(Simulator&, Ui&, Metric) = nullptr;  ///< Inside::showTrend().
+  std::vector<std::string> (*pageNames)() = nullptr;            ///< Inside::pageNames().
+  std::vector<std::string> (*itemNames)() = nullptr;            ///< Inside::itemNames().
 };
+/// @brief The hooks, filled in by `Inside::hooked` as the program starts.
+///
+/// `constinit`, so they're null before that, whatever order the program's
+/// variables are set up in, and never reset after it.
 constinit Hooks hooks;
 
-// Steps from `from` to `to` in a cycle of `count`: positive forwards.
+/// @brief The shorter way from `from` to `to` in a cycle of `count`.
+/// @param from Where it starts.
+/// @param to Where it should get to.
+/// @param count How many there are in the cycle.
+/// @return How many steps: positive forwards, negative backwards.
 int shortestSteps(int from, int to, int count) {
   const int forward = (to - from + count) % count;
   return forward <= count / 2 ? forward : forward - count;
 }
 
-// Clicks don't reach the pages under the Wi-Fi setup and update screens.
+/// @brief Why clicks can't reach the pages, if they can't: the Wi-Fi setup
+/// and update screens cover them.
+/// @return An error message that names the command closing the screen, or "".
 std::string fullScreenError() {
   if (world.wifi.setup != SetupState::Off) return "the Wi-Fi setup screen is showing ('setup off')";
   const OtaState ota = world.ota.state;
@@ -48,15 +67,31 @@ std::string fullScreenError() {
   return "";
 }
 
+/// @brief The code that uses the UI's private members, which it gets as
+/// template arguments (see Hooks).
+/// @tparam Frame `&Ui::frame_`, the frame buffer the UI draws into.
+/// @tparam ModeMember `&Ui::mode_`: the pages, the menu, an edit, a question
+///   or the QR code.
+/// @tparam PageMember `&Ui::page_`, the page showing.
+/// @tparam ItemMember `&Ui::item_`, the menu item showing.
+/// @tparam TrendMember `&Ui::trendMetric_`, the trend pages' metric, as an
+///   index into `TrendMetrics`.
+/// @tparam TrendMetrics `&Ui::kTrendMetrics`, the metrics the trend pages
+///   cycle through.
+/// @tparam AlertMember `&Ui::alertShowing`, whether an alert shows.
+/// @tparam DirtyMember `&Ui::dirty_`, whether to draw at the next update.
 template <auto Frame, auto ModeMember, auto PageMember, auto ItemMember, auto TrendMember,
           auto TrendMetrics, auto AlertMember, auto DirtyMember>
 struct Inside {
+  /// @brief The type of a Ui data member.
+  /// @tparam Member A pointer to it.
   template <auto Member>
   using TypeOf = std::remove_reference_t<decltype(std::declval<Ui&>().*Member)>;
-  using Mode = TypeOf<ModeMember>;
-  using Page = TypeOf<PageMember>;
-  using Item = TypeOf<ItemMember>;
+  using Mode = TypeOf<ModeMember>;  ///< Ui::Mode.
+  using Page = TypeOf<PageMember>;  ///< Ui::Page.
+  using Item = TypeOf<ItemMember>;  ///< Ui::Item.
 
+  /// The pages' names in scripts.
   static constexpr std::pair<const char*, Page> kPages[] = {
       {"overview", Page::Overview}, {"particles", Page::Particles}, {"gases", Page::Gases},
       {"comfort", Page::Comfort},   {"hour", Page::TrendHour},      {"day", Page::TrendDay},
@@ -64,6 +99,7 @@ struct Inside {
   };
   static_assert(std::size(kPages) == static_cast<size_t>(Page::Count), "a name for every page");
 
+  /// The settings menu items' names in scripts.
   static constexpr std::pair<const char*, Item> kItems[] = {
       {"brightness", Item::Brightness},
       {"dim-after", Item::DimAfter},
@@ -89,6 +125,12 @@ struct Inside {
   };
   static_assert(std::size(kItems) == static_cast<size_t>(Item::Count), "a name for every item");
 
+  /// @brief Looks a name up in kPages or kItems.
+  /// @tparam T Page or Item.
+  /// @tparam N The table's length.
+  /// @param table The table.
+  /// @param name The name.
+  /// @return What it names; nullptr if nothing.
   template <typename T, size_t N>
   static const T* find(const std::pair<const char*, T> (&table)[N], const std::string& name) {
     for (const auto& entry : table) {
@@ -97,6 +139,10 @@ struct Inside {
     return nullptr;
   }
 
+  /// @brief The names in kPages or kItems, in order.
+  /// @tparam T Page or Item.
+  /// @tparam N The table's length.
+  /// @param table The table.
   template <typename T, size_t N>
   static std::vector<std::string> names(const std::pair<const char*, T> (&table)[N]) {
     std::vector<std::string> result;
@@ -104,9 +150,19 @@ struct Inside {
     return result;
   }
 
+  /// @brief The frame buffer the UI draws into.
+  /// @param ui The UI.
   static LGFX_Sprite& frame(Ui& ui) { return ui.*Frame; }
+  /// @brief Whether the UI draws the screen at its next update; set it to
+  /// have it drawn.
+  /// @param ui The UI.
   static bool& dirty(Ui& ui) { return ui.*DirtyMember; }
 
+  /// @brief Simulator::dismissAlerts(): clicks D1 until no alert shows, 20
+  /// times at most.
+  /// @param sim The simulator.
+  /// @param ui Its UI.
+  /// @return An error message, or "" once no alert shows.
   static std::string dismissAlerts(Simulator& sim, Ui& ui) {
     if (std::string e = fullScreenError(); !e.empty()) return e;
     for (int i = 0; i < 20; ++i) {
@@ -116,6 +172,11 @@ struct Inside {
     return "alerts keep coming";
   }
 
+  /// @brief Closes alerts, the menu, an edit, a question or the QR code until
+  /// the pages show.
+  /// @param sim The simulator.
+  /// @param ui Its UI.
+  /// @return An error message, or "" once the pages show.
   static std::string backToPages(Simulator& sim, Ui& ui) {
     for (int i = 0; i < 8; ++i) {
       if (std::string e = dismissAlerts(sim, ui); !e.empty()) return e;
@@ -137,6 +198,14 @@ struct Inside {
     return "couldn't get back to the pages";
   }
 
+  /// @brief Simulator::goToPage(): goes back to the pages, then clicks D2
+  /// (forwards) or D0 (backwards), the shorter way, until the page shows.
+  ///
+  /// Alerts that come up on the way are closed.
+  /// @param sim The simulator.
+  /// @param ui Its UI.
+  /// @param name The page's name in kPages.
+  /// @return An error message, or "" once the page shows.
   static std::string goToPage(Simulator& sim, Ui& ui, const std::string& name) {
     const Page* target = find(kPages, name);
     if (target == nullptr) return "no page called '" + name + "'";
@@ -152,6 +221,13 @@ struct Inside {
     return "couldn't reach the page '" + name + "'";
   }
 
+  /// @brief Simulator::openMenu(): goes back to the pages, holds D1 to open
+  /// the menu at its first item, then clicks D2 or D0, the shorter way, until
+  /// the item shows.
+  /// @param sim The simulator.
+  /// @param ui Its UI.
+  /// @param name The item's name in kItems.
+  /// @return An error message, or "" once the item shows.
   static std::string openMenu(Simulator& sim, Ui& ui, const std::string& name) {
     const Item* target = find(kItems, name);
     if (target == nullptr) return "no menu item called '" + name + "'";
@@ -168,6 +244,13 @@ struct Inside {
     return "couldn't reach the menu item '" + name + "'";
   }
 
+  /// @brief Simulator::showTrend(): goes to the trend page that shows, or
+  /// else the last hour's, then clicks D1 until it shows the metric, once
+  /// round them all at most.
+  /// @param sim The simulator.
+  /// @param ui Its UI.
+  /// @param metric The metric.
+  /// @return An error message, or "" once the metric shows.
   static std::string showTrend(Simulator& sim, Ui& ui, Metric metric) {
     const Page page = ui.*PageMember;
     const char* trend = page == Page::TrendDay ? "day" : page == Page::TrendWeek ? "week" : "hour";
@@ -180,9 +263,13 @@ struct Inside {
     return "the trend pages don't show that";
   }
 
+  /// The pages' names, as in kPages.
   static std::vector<std::string> pageNames() { return names(kPages); }
+  /// The menu items' names, as in kItems.
   static std::vector<std::string> itemNames() { return names(kItems); }
 
+  /// @brief Fills in `hooks` with this instantiation's functions as the
+  /// program starts. The value itself means nothing.
   static inline const bool hooked = [] {
     hooks = {&frame,     &dirty,     &dismissAlerts, &goToPage,
              &openMenu,  &showTrend, &pageNames,     &itemNames};
@@ -194,8 +281,15 @@ struct Inside {
 template struct Inside<&Ui::frame_, &Ui::mode_, &Ui::page_, &Ui::item_, &Ui::trendMetric_,
                        &Ui::kTrendMetrics, &Ui::alertShowing, &Ui::dirty_>;
 
-// Made-up history: slow and quicker swings around the reading `now`, ending
-// at it (hoursAgo = 0), with a little noise.
+/// @brief Made-up history: slow and quicker swings around the reading `now`,
+/// ending at it, with a little noise.
+///
+/// Values stay plausible: CO2 at least 400 ppm, the VOC and NOx indices at
+/// least 1, and everything else but temperature at least 0.
+/// @param metric Which metric.
+/// @param hoursAgo How long ago, in hours; 0 is now.
+/// @param now The reading now.
+/// @return The value then; NaN if `now` is NaN.
 float madeUp(Metric metric, double hoursAgo, float now) {
   if (std::isnan(now)) return NAN;
   constexpr double kTau = 6.283185307179586;
@@ -252,7 +346,6 @@ void Simulator::powerOn() {
   step();
 }
 
-// One pass of the firmware's main loop.
 void Simulator::step() {
   world.nowMs += kStepMs;
   const uint32_t now = world.nowMs;

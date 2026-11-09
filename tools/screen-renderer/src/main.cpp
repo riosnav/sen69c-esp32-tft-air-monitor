@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// screen-renderer: draws the air monitor's screen with the firmware's own UI
-// code, following a script, and saves it as PNG files. See README.md.
+
+/// @file
+/// @brief screen-renderer: draws the air monitor's screen with the firmware's
+/// own UI code, following a script, and saves it as PNG files.
+///
+/// See README.md for building and running it; `--help` lists the script
+/// commands.
 
 #include <algorithm>
 #include <cctype>
@@ -24,6 +28,7 @@ using aq::Metric;
 
 namespace {
 
+/// The `--help` text, before the lists of names that printUsage() adds.
 constexpr char kUsage[] = R"(Draws the air monitor's screen with the firmware's own UI code.
 
 Usage:
@@ -85,6 +90,7 @@ Network and updates
                                       waiting for a button, accepted
 )";
 
+/// The metrics' names in scripts (see parseMetric()).
 const std::pair<const char*, Metric> kMetrics[] = {
     {"pm1", Metric::Pm1},   {"pm2.5", Metric::Pm25}, {"pm4", Metric::Pm4},
     {"pm10", Metric::Pm10}, {"co2", Metric::Co2},    {"hcho", Metric::Hcho},
@@ -92,6 +98,8 @@ const std::pair<const char*, Metric> kMetrics[] = {
     {"rh", Metric::Humidity},
 };
 
+/// Prints the `--help` text: kUsage, then the names of the pages, menu items
+/// and metrics.
 void printUsage() {
   std::string text = kUsage;
   auto list = [&](const char* title, const std::vector<std::string>& names) {
@@ -106,17 +114,29 @@ void printUsage() {
   printf("%s\n", text.c_str());
 }
 
+/// @brief Text in lowercase.
+/// @param s The text.
+/// @return `s`, with the ASCII letters in lowercase.
 std::string lower(std::string s) {
   for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
   return s;
 }
 
+/// @brief Reads a number.
+/// @param s The text, which must be just the number.
+/// @param[out] out The number; set even if `s` isn't one.
+/// @return Whether `s` is a number.
 bool parseNumber(const std::string& s, double& out) {
   char* end = nullptr;
   out = std::strtod(s.c_str(), &end);
   return !s.empty() && *end == '\0';
 }
 
+/// @brief Reads a metric's name (see kMetrics); "pm25" works for "pm2.5"
+/// too.
+/// @param s The name, in lowercase.
+/// @param[out] out The metric; left as it was if `s` isn't one.
+/// @return Whether `s` names a metric.
 bool parseMetric(const std::string& s, Metric& out) {
   for (const auto& m : kMetrics) {
     if (s == m.first || (s == "pm25" && m.second == Metric::Pm25)) {
@@ -127,7 +147,15 @@ bool parseMetric(const std::string& s, Metric& out) {
   return false;
 }
 
-// "1h30m", "90s", "500ms"; a bare number is milliseconds.
+/// @brief Reads a time: "1h30m", "90s", "500ms"; a bare number is
+/// milliseconds.
+///
+/// The units are ms, s, m (or min), h and d, and the numbers may have
+/// decimals.
+/// @param s The text.
+/// @param[out] ms The time, in ms; left as it was if `s` isn't one.
+/// @return Whether `s` is a time of 4,000,000,000 ms (46 days) or less, so it
+///   fits in `ms`.
 bool parseDuration(const std::string& s, uint32_t& ms) {
   double total = 0;
   size_t i = 0;
@@ -152,29 +180,47 @@ bool parseDuration(const std::string& s, uint32_t& ms) {
   return true;
 }
 
+/// @brief Reads a button's name: d0, d1 or d2.
+/// @param s The name, in lowercase.
+/// @param[out] button 0 to 2; left as it was if `s` isn't one.
+/// @return Whether `s` names a button.
 bool parseButton(const std::string& s, int& button) {
   if (s.size() != 2 || s[0] != 'd' || s[1] < '0' || s[1] > '2') return false;
   button = s[1] - '0';
   return true;
 }
 
+/// @brief Reads "on" or "off".
+/// @param s The text.
+/// @param[out] on Whether it's "on"; left as it was if it's neither.
+/// @return Whether it's either.
 bool parseSwitch(const std::string& s, bool& on) {
   if (s != "on" && s != "off") return false;
   on = s == "on";
   return true;
 }
 
-// Adds a network to the saved ones, first, unless it's there already.
+/// @brief Adds a network to the saved ones, first, unless it's there already.
+/// @param ssid The network's name.
 void remember(const std::string& ssid) {
   auto& saved = world.wifi.saved;
   if (std::find(saved.begin(), saved.end(), ssid) == saved.end()) saved.insert(saved.begin(), ssid);
 }
 
+/// One command from a script.
 struct Command {
-  std::vector<std::string> words;
-  int line = 0;
+  std::vector<std::string> words;  ///< The command, then its arguments.
+  int line = 0;                    ///< The line it starts on, from 1, for error messages.
 };
 
+/// @brief Splits a script into commands.
+///
+/// Commands go one per line, or are separated by `;`. "Quotes" keep spaces in
+/// a word, and `#` starts a comment that runs to the end of the line.
+/// @param text The script.
+/// @param[out] error What's wrong with it (a quote isn't closed); left as it
+///   was otherwise.
+/// @return The commands; none if there's an error.
 std::vector<Command> parse(const std::string& text, std::string& error) {
   std::vector<Command> commands;
   Command current;
@@ -228,11 +274,20 @@ std::vector<Command> parse(const std::string& text, std::string& error) {
   return commands;
 }
 
+/// Runs scripts, each on a fresh simulated monitor.
 class Runner {
  public:
+  /// @brief A runner whose shots go to `outDir`, at `scale`.
+  /// @param outDir The folder `shot` file names start from (`--out`).
+  /// @param scale The scale for shots that don't give one, 1 to 16
+  ///   (`--scale`).
   Runner(fs::path outDir, int scale) : outDir_(std::move(outDir)), scale_(scale) {}
 
-  // Runs `script` on a fresh monitor; errors name `source` and the line.
+  /// @brief Runs `script` on a fresh monitor; errors name `source` and the
+  /// line.
+  /// @param script The script.
+  /// @param source Where it's from: a file name, or `-e`.
+  /// @return Whether it ran to the end. If not, the error is on stderr.
   bool run(const std::string& script, const std::string& source) {
     std::string error;
     const std::vector<Command> commands = parse(script, error);
@@ -254,7 +309,9 @@ class Runner {
   }
 
  private:
-  // Returns an error message, or "".
+  /// @brief Runs one command (see `--help`).
+  /// @param words The command, then its arguments.
+  /// @return An error message, or "".
   std::string execute(const std::vector<std::string>& words) {
     const std::string command = lower(words[0]);
     const size_t n = words.size() - 1;  // arguments
@@ -568,11 +625,15 @@ class Runner {
     return "unknown command (see --help)";
   }
 
-  fs::path outDir_;
-  int scale_;
-  std::unique_ptr<Simulator> sim_;
+  fs::path outDir_;                 ///< The folder `shot` file names start from.
+  int scale_;                       ///< The scale for shots that don't give one.
+  std::unique_ptr<Simulator> sim_;  ///< The monitor the current script runs on.
 };
 
+/// @brief Reads a whole file.
+/// @param path The file.
+/// @param[out] text What it holds; left as it was if it can't be read.
+/// @return Whether it could be opened.
 bool readFile(const std::string& path, std::string& text) {
   std::ifstream file(path, std::ios::binary);
   if (!file) return false;
@@ -584,6 +645,12 @@ bool readFile(const std::string& path, std::string& text) {
 
 }  // namespace
 
+/// @brief Runs the scripts given on the command line, in order (see
+/// `--help`).
+/// @param argc How many arguments there are, the program's name included.
+/// @param argv The arguments.
+/// @return 0 if every script ran to the end, 1 if one didn't, 2 for wrong
+///   arguments or none.
 int main(int argc, char** argv) {
   int scale = 1;
   fs::path out = ".";

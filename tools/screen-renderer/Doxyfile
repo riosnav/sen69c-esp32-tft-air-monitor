@@ -1,0 +1,41 @@
+# Doxygen settings for the screen renderer's code documentation. Run `doxygen`
+# in this folder; the pages end up in .doxygen/html/index.html (git-ignored).
+# Only the settings that differ from Doxygen's defaults are here; see the
+# project's Doxyfile for the firmware's.
+
+PROJECT_NAME           = "SEN69C Air Monitor: screen renderer"
+PROJECT_BRIEF          = "Draws the monitor's screens on a PC, from the firmware's own UI code"
+OUTPUT_DIRECTORY       = .doxygen
+
+INPUT                  = README.md src shim lgfx
+USE_MDFILE_AS_MAINPAGE = README.md
+# Section links as GitHub makes them.
+MARKDOWN_ID_STYLE      = GITHUB
+FILE_PATTERNS          = *.h *.hpp *.cpp
+RECURSIVE              = YES
+STRIP_FROM_PATH        = .
+STRIP_FROM_INC_PATH    = src shim
+
+# A one-line /// comment is a brief description; a longer one starts with
+# @brief.
+JAVADOC_AUTOBRIEF      = NO
+QT_AUTOBRIEF           = NO
+MULTILINE_CPP_IS_BRIEF = NO
+
+EXTRACT_ALL            = NO
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = YES
+EXTRACT_ANON_NSPACES   = NO
+SOURCE_BROWSER         = YES
+
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = YES
+WARN_IF_DOC_ERROR      = YES
+WARN_IF_INCOMPLETE_DOC = YES
+WARN_NO_PARAMDOC       = NO
+
+GENERATE_LATEX         = NO
+HAVE_DOT               = YES
+DOT_IMAGE_FORMAT       = svg
+CALL_GRAPH             = NO
+CALLER_GRAPH           = NO
