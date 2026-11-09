@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Unit tests for the hardware-independent logic in lib/aqcore and lib/netcore.
-// Run on the board with `pio test`.
+
+/// @file
+/// @brief Unit tests for the hardware-independent logic in lib/aqcore,
+/// lib/netcore and lib/powercore.
+///
+/// Run on the board with `pio test`.
 
 #include <AirQuality.h>
 #include <BatteryWatch.h>
@@ -18,13 +21,17 @@
 
 using namespace aq;
 
+/// Unity's set-up before each test: nothing to do.
 void setUp() {}
+/// Unity's clean-up after each test: nothing to do.
 void tearDown() {}
 
+/// evaluate() gives Unknown for a NaN value.
 static void test_level_unknown_for_nan() {
   TEST_ASSERT_EQUAL(Level::Unknown, evaluate(NAN, defaultThresholds(Metric::Co2), Level::Good));
 }
 
+/// An upper limit: levels rise at the limit and fall back past the hysteresis.
 static void test_level_high_side_with_hysteresis() {
   const Thresholds& co2 = defaultThresholds(Metric::Co2);  // 950 / 2500, hysteresis 50
   TEST_ASSERT_EQUAL(Level::Good, evaluate(949, co2, Level::Good));
@@ -39,6 +46,7 @@ static void test_level_high_side_with_hysteresis() {
   TEST_ASSERT_EQUAL(Level::Good, evaluate(940, co2, Level::Good));
 }
 
+/// Limits on both sides: each side has its own hysteresis band.
 static void test_level_two_sided() {
   const Thresholds& rh = defaultThresholds(Metric::Humidity);  // 20/30 .. 60/70, hysteresis 2
   TEST_ASSERT_EQUAL(Level::Alarm, evaluate(19, rh, Level::Good));
@@ -55,6 +63,7 @@ static void test_level_two_sided() {
   TEST_ASSERT_EQUAL(Level::Warning, evaluate(22, rh, Level::Alarm));
 }
 
+/// The overall level is the worst among metrics with limits; kPriority breaks ties.
 static void test_overall_is_worst_and_ties_follow_priority() {
   AirQuality aq;
   Measurement m;
@@ -79,6 +88,7 @@ static void test_overall_is_worst_and_ties_follow_priority() {
   TEST_ASSERT_EQUAL(Metric::Hcho, aq.worst());
 }
 
+/// A full Ring keeps the newest samples, oldest first.
 static void test_ring_keeps_newest_in_order() {
   Ring<3> r;
   TEST_ASSERT_EQUAL(0, r.size());
@@ -88,6 +98,7 @@ static void test_ring_keeps_newest_in_order() {
   TEST_ASSERT_EQUAL_FLOAT(5, r[2]);
 }
 
+/// groupMeans() lines the groups up with the newest sample and skips gaps.
 static void test_group_means_line_up_with_the_newest() {
   Ring<8> r;
   for (int i = 1; i <= 7; ++i) r.push(static_cast<float>(i));
@@ -110,6 +121,7 @@ static void test_group_means_line_up_with_the_newest() {
   TEST_ASSERT_EQUAL_FLOAT(7, out[0]);
 }
 
+/// MetricHistory keeps 10 s means, and NaN for periods without data.
 static void test_history_averages_and_records_gaps() {
   auto h = std::make_unique<MetricHistory>();
   Measurement m;
@@ -131,6 +143,7 @@ static void test_history_averages_and_records_gaps() {
   TEST_ASSERT_TRUE(std::isnan(fine[2]));
 }
 
+/// ButtonLogic debounces and gives Press, Click, LongPress and Repeat.
 static void test_button_click_long_press_and_repeat() {
   ButtonLogic b;
   uint32_t t = 0;
@@ -150,6 +163,7 @@ static void test_button_click_long_press_and_repeat() {
   TEST_ASSERT_EQUAL(ButtonEvent::None, b.update(false, t += 30));
 }
 
+/// After ButtonLogic::swallow(), the rest of the press gives no events.
 static void test_button_swallow_suppresses_rest_of_press() {
   ButtonLogic b;
   uint32_t t = 0;
@@ -166,6 +180,7 @@ static void test_button_swallow_suppresses_rest_of_press() {
   TEST_ASSERT_EQUAL(ButtonEvent::Click, b.update(false, t += 30));
 }
 
+/// ButtonLogic::ignoreHeld() ignores the press under way, not the next one.
 static void test_button_ignore_held_until_released() {
   ButtonLogic b;
   uint32_t t = 0;
@@ -178,6 +193,7 @@ static void test_button_ignore_held_until_released() {
   TEST_ASSERT_EQUAL(ButtonEvent::Press, b.update(true, t += 30));
 }
 
+/// Dew point, absolute humidity and degF at 25 degC, 50 %RH; NaN gives NaN.
 static void test_comfort_values() {
   TEST_ASSERT_FLOAT_WITHIN(0.1f, 13.9f, dewPoint(25, 50));
   TEST_ASSERT_FLOAT_WITHIN(0.1f, 11.5f, absoluteHumidity(25, 50));
@@ -185,6 +201,7 @@ static void test_comfort_values() {
   TEST_ASSERT_TRUE(std::isnan(dewPoint(NAN, 50)));
 }
 
+/// chooseNetworks(): networks seen by signal, then hidden ones not seen.
 static void test_wifi_choice_strongest_first_then_hidden() {
   const net::SavedNetwork saved[] = {
       {"Home", false}, {"Office", false}, {"Lab", true}, {"Cabin", false}, {"Attic", true}};
@@ -203,6 +220,7 @@ static void test_wifi_choice_strongest_first_then_hidden() {
   // Cabin isn't in range and isn't hidden: not tried.
 }
 
+/// chooseNetworks(): equal signals keep the saved order; nothing seen, nothing tried.
 static void test_wifi_choice_ties_keep_saved_order() {
   const net::SavedNetwork saved[] = {{"A", false}, {"B", false}};
   const net::ScanEntry scan[] = {{"B", -60}, {"A", -60}};
@@ -213,6 +231,7 @@ static void test_wifi_choice_ties_keep_saved_order() {
   TEST_ASSERT_EQUAL(0, net::chooseNetworks(saved, 2, scan, 0, out));
 }
 
+/// LoginGuard: free tries, then waits that double up to the limit.
 static void test_login_guard_waits_double_up_to_a_limit() {
   net::LoginGuard g;
   uint32_t t = 1000;
@@ -237,6 +256,7 @@ static void test_login_guard_waits_double_up_to_a_limit() {
   TEST_ASSERT_EQUAL(16, g.failures());
 }
 
+/// LoginGuard's wait still ends when millis() wraps.
 static void test_login_guard_survives_millis_wrapping() {
   net::LoginGuard g;
   const uint32_t t = 0xFFFFFFFFu - 30000;
@@ -245,6 +265,7 @@ static void test_login_guard_survives_millis_wrapping() {
   TEST_ASSERT_EQUAL(0, g.waitMs(t + 60000));
 }
 
+/// parseIpv4() takes exactly `a.b.c.d`; formatIpv4() writes it.
 static void test_ipv4_parse_and_format() {
   uint32_t a = 0;
   TEST_ASSERT_TRUE(net::parseIpv4("192.168.1.20", a));
@@ -260,6 +281,7 @@ static void test_ipv4_parse_and_format() {
   TEST_ASSERT_EQUAL_STRING("192.168.1.20", text);
 }
 
+/// checkFixedAddress() turns down bad masks, addresses, gateways and DNS servers.
 static void test_fixed_address_checks() {
   uint32_t ip, mask, gw, dns;
   net::parseIpv4("192.168.1.20", ip);
@@ -279,6 +301,7 @@ static void test_fixed_address_checks() {
   TEST_ASSERT_NOT_NULL(net::checkFixedAddress(ip, mask, gw, 0xE0000001));  // multicast DNS server
 }
 
+/// power::stateOf(): the battery's state from the charge rate.
 static void test_battery_state_from_charge_rate() {
   TEST_ASSERT_EQUAL(power::BatteryState::Unknown, power::stateOf(NAN));
   TEST_ASSERT_EQUAL(power::BatteryState::Charging, power::stateOf(12.5f));
@@ -287,6 +310,7 @@ static void test_battery_state_from_charge_rate() {
   TEST_ASSERT_EQUAL(power::BatteryState::Idle, power::stateOf(-0.208f));
 }
 
+/// Voltage jumps set the state until the rate follows; Wi-Fi dips don't count.
 static void test_battery_state_follows_voltage_jumps() {
   using power::BatteryState;
   power::BatteryWatch w;
@@ -318,6 +342,7 @@ static void test_battery_state_follows_voltage_jumps() {
   TEST_ASSERT_EQUAL(BatteryState::Discharging, slow.state());
 }
 
+/// A full battery on USB power isn't discharging, though the rate wanders below 0.
 static void test_battery_full_on_usb_is_not_in_use() {
   using power::BatteryState;
   power::BatteryWatch w;
@@ -329,6 +354,7 @@ static void test_battery_full_on_usb_is_not_in_use() {
   TEST_ASSERT_EQUAL(BatteryState::Discharging, w.state());
 }
 
+/// After pluggedIn(), it's charging without a warning while the rate catches up.
 static void test_battery_started_on_usb_power() {
   // Started again by USB power after an empty battery: the rate still says
   // discharging, and the charge is below the first warning's limit.
@@ -342,6 +368,7 @@ static void test_battery_started_on_usb_power() {
   TEST_ASSERT_EQUAL(power::BatteryState::Charging, w.state());
 }
 
+/// Warnings at 20 % and 10 % charge, ending only clearly above the limit.
 static void test_battery_warnings_with_hysteresis() {
   power::BatteryWatch w;
   w.setPresent(true);
@@ -363,6 +390,7 @@ static void test_battery_warnings_with_hysteresis() {
   TEST_ASSERT_EQUAL(0, w.warning());
 }
 
+/// Warnings by voltage: a minute at 3.6 V or below, then 3.55 V, at any charge.
 static void test_battery_warns_by_voltage() {
   // A 400 mAh battery running the monitor: 3.6 V while the gauge read 45 %.
   power::BatteryWatch w;
@@ -384,6 +412,7 @@ static void test_battery_warns_by_voltage() {
   TEST_ASSERT_EQUAL(0, w.warning());
 }
 
+/// Learning where "empty" is, and percent() counting the charge left down to it.
 static void test_battery_counts_down_to_switching_off() {
   power::BatteryWatch w;
   w.setPresent(true);
@@ -413,6 +442,7 @@ static void test_battery_counts_down_to_switching_off() {
   TEST_ASSERT_TRUE(std::isnan(power::BatteryWatch().percent()));
 }
 
+/// empty() after a minute at 3.5 V or below while discharging, and not otherwise.
 static void test_battery_empty_after_a_minute_low() {
   power::BatteryWatch w;
   w.setPresent(true);
@@ -434,11 +464,13 @@ static void test_battery_empty_after_a_minute_low() {
   TEST_ASSERT_FALSE_MESSAGE(idle.empty(), "not discharging");
 }
 
-// Without a battery the battery monitor reads the charger (recorded, 5 s apart).
+/// @brief What the battery monitor reads without a battery: the charger, in V
+/// (recorded, 5 s apart).
 static const float kCharger[] = {4.107f, 4.072f, 4.061f, 4.183f, 4.144f, 4.149f, 4.106f, 4.124f,
                                  4.070f, 4.110f, 4.135f, 4.130f, 4.141f, 4.081f, 4.059f, 4.183f,
                                  4.110f, 4.107f, 4.140f, 4.146f, 4.099f, 4.104f, 4.112f, 4.071f};
 
+/// present() from the voltage: the charger alone jitters, a battery doesn't.
 static void test_battery_presence_from_the_voltage() {
   power::BatteryWatch w;
   w.setPresent(true);  // as before a restart
@@ -459,6 +491,7 @@ static void test_battery_presence_from_the_voltage() {
   TEST_ASSERT_TRUE(early.present());
 }
 
+/// takeConnected() once when a battery appears, which forgets where "empty" was.
 static void test_battery_connected_while_running() {
   power::BatteryWatch w;
   w.setEmptyPercent(20.5f);
@@ -479,6 +512,7 @@ static void test_battery_connected_while_running() {
   TEST_ASSERT_FLOAT_WITHIN(0.01f, 20.5f, all.emptyPercent());
 }
 
+/// power::powerIsBack(): charging, or at least 3.8 V.
 static void test_power_is_back() {
   TEST_ASSERT_TRUE(power::powerIsBack(3.55f, 9.8f));    // charging
   TEST_ASSERT_TRUE(power::powerIsBack(3.85f, 0));        // well charged
@@ -487,6 +521,8 @@ static void test_power_is_back() {
   TEST_ASSERT_FALSE_MESSAGE(power::powerIsBack(NAN, NAN), "no reading");
 }
 
+/// @brief Runs every test.
+/// @return The number of failures.
 static int runTests() {
   UNITY_BEGIN();
   RUN_TEST(test_level_unknown_for_nan);
@@ -522,6 +558,7 @@ static int runTests() {
 
 #ifdef ARDUINO
 #include <Arduino.h>
+/// On the board: waits for the test runner, then runs the tests.
 void setup() {
   // With native USB the port only appears after the board has rebooted, so
   // wait for the test runner to open it before printing anything.
@@ -529,7 +566,10 @@ void setup() {
   delay(500);
   runTests();
 }
+/// On the board: nothing more; the tests ran in setup().
 void loop() {}
 #else
+/// @brief Off the board: runs the tests.
+/// @return The number of failures.
 int main() { return runTests(); }
 #endif

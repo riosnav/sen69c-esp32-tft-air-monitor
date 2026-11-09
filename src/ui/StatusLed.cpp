@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+/// @file
+/// @brief The status LED's colours, brightness and blinking (see StatusLed.h).
+
 #include "StatusLed.h"
 
 #include <Arduino.h>

@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+/// @file
+/// @brief Wi-Fi: joining saved networks, scanning, and the setup hotspot with
+/// its captive portal (see WifiService.h).
+
 #include "WifiService.h"
 
 #include <ESPmDNS.h>
@@ -14,35 +18,58 @@
 
 namespace {
 
+/// The longest a try at joining a network may take, in ms.
 constexpr uint32_t kAttemptTimeoutMs = 20000;
-constexpr uint32_t kFirstRetryMs = 15000;  // rescan delay when no saved network is in range...
-constexpr uint32_t kMaxRetryMs = 5 * 60000;  // ...doubling up to this
-constexpr uint32_t kSetupIdleMs = 10 * 60000;  // the hotspot closes when nobody uses it
-constexpr uint32_t kSetupMaxMs = 30 * 60000;
-constexpr uint32_t kSetupDoneMs = 2 * 60000;  // after success, so the phone can show the result
+/// The first rescan delay when no saved network is in range, in ms.
+constexpr uint32_t kFirstRetryMs = 15000;
+constexpr uint32_t kMaxRetryMs = 5 * 60000;  ///< The delay doubles up to this, in ms.
+/// The setup hotspot closes when nobody uses it for this long, in ms.
+constexpr uint32_t kSetupIdleMs = 10 * 60000;
+constexpr uint32_t kSetupMaxMs = 30 * 60000;  ///< The longest the setup hotspot stays up, in ms.
+/// @brief How long the setup hotspot stays up after success, in ms, so the
+/// phone can show the result.
+constexpr uint32_t kSetupDoneMs = 2 * 60000;
+/// The delay of WifiService::stopSetupSoon(), in ms.
 constexpr uint32_t kSetupStopDelayMs = 1500;
-// After a new address for the network in use: long enough for the web page
-// to get its answer over the old one.
+/// @brief The delay before rejoining after a new address for the network in
+/// use, in ms: long enough for the web page to get its answer over the old
+/// one.
 constexpr uint32_t kRejoinDelayMs = 1000;
-// Joining again before the old connection is gone can fail: an address change
-// once took 35 s, its first attempt timing out.
+/// @brief How long to wait for the old connection to close before joining
+/// again, in ms.
+///
+/// Joining again before the old connection is gone can make the first attempt
+/// time out.
 constexpr uint32_t kDisconnectWaitMs = 1000;
+/// The setup hotspot's password length, in characters.
 constexpr size_t kHotspotPasswordLength = 8;
 
+/// @brief Whether the time `atMs` has come, also across millis() wrapping
+/// around.
+/// @param nowMs The time, as millis().
+/// @param atMs The time it's due, as millis().
 bool due(uint32_t nowMs, uint32_t atMs) { return static_cast<int32_t>(nowMs - atMs) >= 0; }
 
-// From FixedAddress's form, first part in the top byte.
+/// @brief Converts an address from FixedAddress's form, first part in the top
+/// byte.
+/// @param a The address.
+/// @return It as an IPAddress.
 IPAddress ipAddress(uint32_t a) { return IPAddress(a >> 24, a >> 16 & 0xFF, a >> 8 & 0xFF, a & 0xFF); }
 
-// AUTH_EXPIRE is also what a router sends when it rejects the key: a wrong
-// password during setup (hotspot up) came back as that rather than as a
-// handshake timeout.
+/// @brief Whether a disconnect reason means a wrong password.
+///
+/// AUTH_EXPIRE counts too: it's also what a router sends when it rejects the
+/// key, and with the setup hotspot up a wrong password comes back as that
+/// rather than as a handshake timeout.
+/// @param reason A `WIFI_REASON_` code.
 bool isPasswordFailure(uint8_t reason) {
   return reason == WIFI_REASON_MIC_FAILURE || reason == WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT ||
          reason == WIFI_REASON_AUTH_FAIL || reason == WIFI_REASON_HANDSHAKE_TIMEOUT ||
          reason == WIFI_REASON_AUTH_EXPIRE;
 }
 
+/// @brief Whether a disconnect reason means the network wasn't found.
+/// @param reason A `WIFI_REASON_` code.
 bool isNotFound(uint8_t reason) {
   return reason == WIFI_REASON_NO_AP_FOUND ||
          reason == WIFI_REASON_NO_AP_FOUND_W_COMPATIBLE_SECURITY ||
@@ -50,6 +77,9 @@ bool isNotFound(uint8_t reason) {
          reason == WIFI_REASON_NO_AP_FOUND_IN_RSSI_THRESHOLD;
 }
 
+/// @brief The driver's record of a network the last scan found.
+/// @param i Its index in the scan.
+/// @return The record, or nullptr if there's none.
 const wifi_ap_record_t* scanRecord(int i) {
   return static_cast<const wifi_ap_record_t*>(WiFi.getScanInfoByIndex(i));
 }
@@ -295,7 +325,6 @@ void WifiService::onAttemptFailed(uint32_t nowMs) {
   connectNext(nowMs);
 }
 
-// Tries the saved network `ssid` alone, then scans if that fails.
 void WifiService::rejoin(const char* ssid, uint32_t nowMs) {
   const WifiCredentials* network = store_.find(ssid);
   if (network == nullptr) {
@@ -394,7 +423,7 @@ void WifiService::startSetup() {
   // Every DNS name resolves to us, so the phone's connectivity check reaches
   // the web server, which redirects it to the setup page. (No DHCP option
   // 114: phones expect it to name a JSON API, and an iPhone given the page
-  // instead decided the hotspot had no internet and left it.)
+  // instead decides the hotspot has no internet and leaves it.)
   hotspotIp_ = WiFi.softAPIP();
   dns_.start(53, "*", hotspotIp_);
   scanRequested_ = true;  // for the list of networks on the setup page

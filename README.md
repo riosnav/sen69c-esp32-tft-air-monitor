@@ -389,6 +389,13 @@ pio run -t upload               # put the normal firmware back
 as PNG files, from the firmware's own UI code: to see every screen without the hardware, or to check a change to
 the UI. The screenshot at the top of this README comes from it. Its README explains how to build and run it.
 
+### Code documentation
+
+The C++ code is documented for [Doxygen](https://www.doxygen.nl/): run `doxygen` in the project folder, and open
+`.doxygen/html/index.html`. With [Graphviz](https://graphviz.org/) installed, the pages also show class and include
+diagrams. The screen renderer has its own settings: run `doxygen` in `tools/screen-renderer`. The web page's
+JavaScript has JSDoc comments.
+
 ### JSON API and MQTT topics
 
 The web page uses a small JSON API (`/api/state`, `/api/history?metric=co2&range=hour|day|week`, `/api/settings`,

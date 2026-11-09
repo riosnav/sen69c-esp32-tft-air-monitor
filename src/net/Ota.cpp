@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+/// @file
+/// @brief Firmware updates over Wi-Fi: receiving the image, confirming it on
+/// the monitor, and confirming or rolling back new firmware (see Ota.h).
+
 #include "Ota.h"
 
 #include <Arduino.h>
@@ -11,18 +15,22 @@
 
 namespace {
 
-// How long a new image has to rejoin Wi-Fi before it's rolled back.
+/// How long a new image has to rejoin Wi-Fi before it's rolled back, in ms.
 constexpr uint32_t kProbationMs = 5 * 60000;
-// After a yes, time for the web page to hear it before the restart.
+/// After a yes, time for the web page to hear it before the restart, in ms.
 constexpr uint32_t kRestartDelayMs = 3000;
 
-// An app image starts with the image header, the first segment's header and
-// the app description.
+/// @brief Where the app description starts in an app image, in bytes.
+///
+/// An app image starts with the image header, the first segment's header and
+/// the app description.
 constexpr size_t kAppDescOffset = sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t);
 
 }  // namespace
 
-// Tells the Arduino core not to confirm a new image at boot; Ota::loop does.
+/// @brief Tells the Arduino core not to confirm a new image at boot;
+/// Ota::loop() does.
+/// @return Always true.
 extern "C" bool verifyRollbackLater() { return true; }
 
 void Ota::begin() {

@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+/// @file
+/// @brief The UI's input and state: buttons, the menu and its actions,
+/// alerts, the backlight and the status LED (see Ui.h; the drawing is in
+/// UiDraw.cpp).
+
 #include "Ui.h"
 
 #include <algorithm>
@@ -9,35 +14,53 @@
 
 namespace {
 
-// D0 doubles as BOOT and is pulled up; D1/D2 are pulled down (so they can wake
-// the chip from deep sleep), so they read HIGH when pressed.
+/// @brief The buttons' pins: D0, D1 and D2.
+///
+/// D0 doubles as BOOT and is pulled up; D1/D2 are pulled down (so they can wake
+/// the chip from deep sleep), so they read HIGH when pressed.
 constexpr uint8_t kButtonPins[] = {0, 1, 2};
-constexpr bool kPressedLevel[] = {LOW, HIGH, HIGH};
+constexpr bool kPressedLevel[] = {LOW, HIGH, HIGH};  ///< What each button reads while pressed.
 
-constexpr uint8_t kDimmedBrightness = 4;  // of 255
-constexpr uint32_t kDrawIntervalMs = 250;
-constexpr uint32_t kToastMs = 4000;
-constexpr uint32_t kMenuTimeoutMs = 60000;
+constexpr uint8_t kDimmedBrightness = 4;  ///< Backlight while dimmed, of 255.
+constexpr uint32_t kDrawIntervalMs = 250;  ///< How often to redraw, in ms, even if nothing changed.
+constexpr uint32_t kToastMs = 4000;  ///< How long a toast shows, in ms.
+constexpr uint32_t kMenuTimeoutMs = 60000;  ///< A menu left alone this long closes, in ms.
+/// An alert left alone this long on screen closes, as if dismissed, in ms.
 constexpr uint32_t kAlertTimeoutMs = 60000;
-// When the screen switches off while silenced, if it's set never to dim.
+/// When the screen switches off while silenced, in s, if it's set never to dim.
 constexpr uint32_t kSilencedIdleS = 120;
+/// CO2 in fresh outdoor air, in ppm: the forced recalibration's reference.
 constexpr uint16_t kOutdoorCo2Ppm = 420;
 
+/// @brief Steps an enum through its values, wrapping around.
+/// @tparam E The enum, with values from 0 to `count` - 1.
+/// @param value The value to step from.
+/// @param delta How far: +1 for the next value, -1 for the previous one.
+/// @param count The enum's `Count`, one past its last value.
+/// @return The value stepped to.
 template <typename E>
 E stepEnum(E value, int delta, E count) {
   const int n = static_cast<int>(count);
   return static_cast<E>((static_cast<int>(value) + delta + n) % n);
 }
 
+/// @brief A brightness setting as the backlight takes it.
+/// @param percent The brightness, in %.
+/// @return The backlight, of 255.
 uint8_t backlight(uint8_t percent) { return static_cast<uint8_t>(percent * 255 / 100); }
 
-// Whether an alert at `level` may turn the screen on. Battery alerts count as
-// warnings.
+/// @brief Whether an alert at `level` may turn the screen on.
+///
+/// Battery alerts count as warnings.
+/// @param silence The Silence setting.
+/// @param level The alert's level.
 bool wakesScreen(Silence silence, aq::Level level) {
   return silence == Silence::Off || (silence == Silence::Warnings && level == aq::Level::Alarm);
 }
 
-// Whether an update fills the screen.
+/// @brief Whether an update fills the screen: it's arriving, waiting for an
+/// answer, or installing.
+/// @param state The update's state.
 bool updating(OtaState state) {
   return state == OtaState::Receiving || state == OtaState::Confirming ||
          state == OtaState::Accepted;
@@ -187,7 +210,6 @@ void Ui::onPageEvent(size_t button, aq::ButtonEvent event) {
   }
 }
 
-// D1 on the Wi-Fi page takes the obvious next step.
 void Ui::onNetworkAction() {
   if (!settings_->wifiEnabled && wifi_->saved().size() > 0) {
     settings_->wifiEnabled = true;
@@ -236,7 +258,6 @@ void Ui::onConfirmEvent(size_t button, aq::ButtonEvent event) {
   }
 }
 
-// Holding any button says yes (see updatePrompt); a short press says no.
 void Ui::onUpdatePromptEvent(size_t button, aq::ButtonEvent event, uint32_t nowMs) {
   if (event == aq::ButtonEvent::Press && !holding_) {
     holding_ = true;
@@ -248,7 +269,6 @@ void Ui::onUpdatePromptEvent(size_t button, aq::ButtonEvent event, uint32_t nowM
   dirty_ = true;
 }
 
-// Notices an update arriving and ending, and how long the button is held.
 void Ui::updatePrompt(uint32_t nowMs) {
   const OtaState state = ota_->state();
   if (state != otaState_) {
@@ -482,15 +502,11 @@ void Ui::updateBacklight(uint32_t nowMs) {
   applyBacklight();
 }
 
-// How long without input until the screen dims or switches off; 0 = never.
 uint32_t Ui::idleAfterS() const {
   const bool never = settings_->dimAfterS == 0;
   return never && settings_->silence != Silence::Off ? kSilencedIdleS : settings_->dimAfterS;
 }
 
-// Full brightness, dimmed, or (idle, if so set or silenced) the screen switched
-// off. Only the backlight and the display chip sleep: the sensor shares the
-// screen's power, which stays on.
 void Ui::applyBacklight() {
   const bool off = dimmed_ && (settings_->screenOffWhenIdle || settings_->silence != Silence::Off);
   if (off != screenOff_) {

@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+/// @file
+/// @brief The web server's handlers: the pages, the JSON API, the web
+/// password and the setup hotspot's captive portal (see Web.h).
+
 #include "Web.h"
 
 #include <Arduino.h>
@@ -33,19 +37,24 @@ namespace web {
 
 namespace {
 
-constexpr size_t kMaxBodyBytes = 2048;
-constexpr size_t kOtaChunkBytes = 4096;
-constexpr int kRecvRetries = 5;
+constexpr size_t kMaxBodyBytes = 2048;   ///< The largest JSON request body, in bytes.
+constexpr size_t kOtaChunkBytes = 4096;  ///< How much of an image is received at a time, in bytes.
+constexpr int kRecvRetries = 5;  ///< How often receiving may time out before a request fails.
 
-Context ctx;
-httpd_handle_t server = nullptr;
-// Handlers all run in the server's task, so the guard needs no lock; the
-// count is copied out for the UI.
+Context ctx;                      ///< What the handlers reach (see begin()).
+httpd_handle_t server = nullptr;  ///< The running server; nullptr before begin().
+/// @brief Slows down guessing of the web password.
+///
+/// Handlers all run in the server's task, so the guard needs no lock; the
+/// count is copied out for the UI.
 net::LoginGuard guard;
-std::atomic<uint32_t> loginFailures{0};
+std::atomic<uint32_t> loginFailures{0};  ///< Wrong web passwords since start, for the UI.
 
 // ---------------------------------------------------------------- helpers
 
+/// @brief A level's ID in the JSON.
+/// @param level The level.
+/// @return "good", "warning", "alarm" or "unknown".
 const char* levelId(Level level) {
   switch (level) {
     case Level::Good:
@@ -59,6 +68,9 @@ const char* levelId(Level level) {
   }
 }
 
+/// @brief The sensor's state's ID in the JSON.
+/// @param state The state.
+/// @return "measuring", "busy", "not found" or "starting".
 const char* sensorStateId(SensorState state) {
   switch (state) {
     case SensorState::Measuring:
@@ -72,6 +84,9 @@ const char* sensorStateId(SensorState state) {
   }
 }
 
+/// @brief Wi-Fi's state's ID in the JSON.
+/// @param state The state.
+/// @return "searching", "connecting", "connected" or "off".
 const char* wifiStateId(WifiState state) {
   switch (state) {
     case WifiState::Searching:
@@ -85,6 +100,9 @@ const char* wifiStateId(WifiState state) {
   }
 }
 
+/// @brief The setup hotspot's state's ID in the JSON.
+/// @param state The state.
+/// @return "waiting", "joined", "testing", "succeeded", "failed" or "off".
 const char* setupStateId(SetupState state) {
   switch (state) {
     case SetupState::Waiting:
@@ -102,6 +120,9 @@ const char* setupStateId(SetupState state) {
   }
 }
 
+/// @brief The battery's state's ID in the JSON.
+/// @param state The state.
+/// @return "charging", "discharging", "idle" or "unknown".
 const char* batteryStateId(power::BatteryState state) {
   switch (state) {
     case power::BatteryState::Charging:
@@ -115,6 +136,10 @@ const char* batteryStateId(power::BatteryState state) {
   }
 }
 
+/// @brief An update's state's ID in the JSON.
+/// @param state The state.
+/// @return "receiving", "confirming", "accepted", "refused", "timedOut",
+///   "failed" or "idle".
 const char* otaStateId(OtaState state) {
   switch (state) {
     case OtaState::Receiving:
@@ -134,7 +159,10 @@ const char* otaStateId(OtaState state) {
   }
 }
 
-// Why the monitor last started, which tells a crash from a power cut.
+/// @brief Why the monitor last started, as an ID in the JSON, which tells a
+/// crash from a power cut.
+/// @param reason From esp_reset_reason().
+/// @return E.g. "power-on", "crash" or "watchdog"; "other" for the rest.
 const char* resetReasonId(esp_reset_reason_t reason) {
   switch (reason) {
     case ESP_RST_POWERON:
@@ -158,6 +186,9 @@ const char* resetReasonId(esp_reset_reason_t reason) {
   }
 }
 
+/// @brief The MQTT client's state's ID in the JSON.
+/// @param state The state.
+/// @return "waiting", "connecting", "connected", "failed" or "off".
 const char* mqttStateId(MqttState state) {
   switch (state) {
     case MqttState::Waiting:
@@ -173,19 +204,32 @@ const char* mqttStateId(MqttState state) {
   }
 }
 
+/// @brief Adds the MQTT client's state and error to a JSON object.
+/// @param object The object.
+/// @param mqtt The client.
 void addMqttState(cJSON* object, const MqttService& mqtt) {
   cJSON_AddStringToObject(object, "state", mqttStateId(mqtt.state()));
   cJSON_AddStringToObject(object, "error", mqtt.error());
 }
 
+/// @brief The status LED setting's ID in the JSON.
+/// @param mode The setting.
+/// @return "off", "dim" or "bright".
 const char* ledId(LedMode mode) {
   return mode == LedMode::Off ? "off" : mode == LedMode::Dim ? "dim" : "bright";
 }
 
+/// @brief The Silence setting's ID in the JSON.
+/// @param silence The setting.
+/// @return "off", "warnings" or "all".
 const char* silenceId(Silence silence) {
   return silence == Silence::Off ? "off" : silence == Silence::Warnings ? "warnings" : "all";
 }
 
+/// @brief Finds a metric by its ID in the JSON, e.g. "co2".
+/// @param id The ID.
+/// @param[out] out The metric, if found.
+/// @return Whether it was.
 bool metricFromId(const char* id, Metric& out) {
   for (size_t i = 0; i < aq::kMetricCount; ++i) {
     if (strcmp(id, aq::kMetricIds[i]) == 0) {
@@ -196,7 +240,11 @@ bool metricFromId(const char* id, Metric& out) {
   return false;
 }
 
-// [low, high] limits, null where a side has none.
+/// @brief A metric's limits as a JSON array, `[low, high]`, null where a side
+/// has none.
+/// @param low The low limit; NaN for none.
+/// @param high The high limit; NaN for none.
+/// @return The array, with the limits rounded to 1 decimal.
 cJSON* limits(float low, float high) {
   cJSON* array = cJSON_CreateArray();
   for (float v : {low, high}) {
@@ -205,15 +253,27 @@ cJSON* limits(float low, float high) {
   return array;
 }
 
+/// @brief A member of a JSON object.
+/// @param object The object.
+/// @param key The member's key; case matters.
+/// @return The member, or nullptr if there's none.
 const cJSON* field(const cJSON* object, const char* key) {
   return cJSON_GetObjectItemCaseSensitive(object, key);
 }
 
+/// @brief A text member of a JSON object.
+/// @param object The object.
+/// @param key The member's key; case matters.
+/// @return Its text, or nullptr if it's missing or not text.
 const char* stringField(const cJSON* object, const char* key) {
   const cJSON* f = field(object, key);
   return cJSON_IsString(f) ? f->valuestring : nullptr;
 }
 
+/// @brief Answers with JSON, not to be cached.
+/// @param req The request.
+/// @param json What to send.
+/// @return ESP_OK, or an error to close the connection.
 esp_err_t sendJson(httpd_req_t* req, const cJSON* json) {
   const JsonText text(cJSON_PrintUnformatted(json));
   if (!text) return httpd_resp_send_500(req);
@@ -222,21 +282,38 @@ esp_err_t sendJson(httpd_req_t* req, const cJSON* json) {
   return httpd_resp_sendstr(req, text.get());
 }
 
+/// @brief Answers with plain text.
+/// @param req The request.
+/// @param status The HTTP status, e.g. "400 Bad Request".
+/// @param text The text.
+/// @return ESP_OK, or an error to close the connection.
 esp_err_t sendText(httpd_req_t* req, const char* status, const char* text) {
   httpd_resp_set_status(req, status);
   httpd_resp_set_type(req, "text/plain; charset=utf-8");
   return httpd_resp_sendstr(req, text);
 }
 
+/// @brief Answers 400 Bad Request, saying why.
+/// @param req The request.
+/// @param reason What's wrong, for people.
+/// @return ESP_OK, or an error to close the connection.
 esp_err_t badRequest(httpd_req_t* req, const char* reason) {
   return sendText(req, "400 Bad Request", reason);
 }
 
+/// @brief Answers 204 No Content: done.
+/// @param req The request.
+/// @return ESP_OK, or an error to close the connection.
 esp_err_t sendOk(httpd_req_t* req) {
   httpd_resp_set_status(req, "204 No Content");
   return httpd_resp_send(req, nullptr, 0);
 }
 
+/// @brief Answers with a page that the firmware holds gzipped (see
+/// `web/WebAssets.h`).
+/// @param req The request.
+/// @param asset The page.
+/// @return ESP_OK, or an error to close the connection.
 esp_err_t sendAsset(httpd_req_t* req, const WebAsset& asset) {
   httpd_resp_set_type(req, asset.type);
   httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
@@ -244,7 +321,10 @@ esp_err_t sendAsset(httpd_req_t* req, const WebAsset& asset) {
   return httpd_resp_send(req, reinterpret_cast<const char*>(asset.data), asset.size);
 }
 
-// Reads a JSON request body.
+/// @brief Reads a JSON request body.
+/// @param req The request.
+/// @return The JSON; null if the body is empty, longer than kMaxBodyBytes,
+///   cut short or not JSON.
 Json readJson(httpd_req_t* req) {
   if (req->content_len == 0 || req->content_len > kMaxBodyBytes) return nullptr;
   std::unique_ptr<char[]> body(new (std::nothrow) char[req->content_len + 1]);
@@ -261,8 +341,12 @@ Json readJson(httpd_req_t* req) {
   return Json(cJSON_ParseWithLength(body.get(), received));
 }
 
-// Local address the request came in on. The server listens on IPv6, where
-// IPv4 clients show up as IPv4-mapped addresses.
+/// @brief The local address the request came in on.
+///
+/// The server listens on IPv6, where IPv4 clients show up as IPv4-mapped
+/// addresses.
+/// @param req The request.
+/// @return The IPv4 address; 0.0.0.0 if there's none.
 IPAddress localAddress(httpd_req_t* req) {
   sockaddr_storage address{};
   socklen_t length = sizeof address;
@@ -282,7 +366,8 @@ IPAddress localAddress(httpd_req_t* req) {
   return IPAddress();
 }
 
-// Whether the request came through the setup hotspot.
+/// @brief Whether the request came through the setup hotspot.
+/// @param req The request.
 bool viaHotspot(httpd_req_t* req) {
   IPAddress hotspot;
   {
@@ -293,6 +378,9 @@ bool viaHotspot(httpd_req_t* req) {
   return localAddress(req) == hotspot;
 }
 
+/// @brief Whether a password given is the right one.
+/// @param given The password given.
+/// @param expected The right one; not empty.
 bool sameSecret(const char* given, const char* expected) {
   // Takes as long for a near miss as for a far one.
   const size_t length = strlen(expected);
@@ -301,8 +389,12 @@ bool sameSecret(const char* given, const char* expected) {
   return diff == 0;
 }
 
-// The password from a basic auth header ("user:password"; the user name
-// doesn't matter), or nullptr if the header is malformed.
+/// @brief The password from a basic auth header ("user:password"; the user
+/// name doesn't matter).
+/// @param header The `Authorization` header's value.
+/// @param[out] decoded Room for the decoded header, which the password points
+///   into.
+/// @return The password, or nullptr if the header is malformed.
 const char* passwordOf(const char* header, unsigned char (&decoded)[128]) {
   if (strncmp(header, "Basic ", 6) != 0) return nullptr;
   size_t length = 0;
@@ -316,6 +408,12 @@ const char* passwordOf(const char* header, unsigned char (&decoded)[128]) {
   return colon != nullptr ? colon + 1 : nullptr;
 }
 
+/// @brief Whether a request may change things: it carries the web password,
+/// none is set, or it came through the setup hotspot.
+///
+/// While the guard says wait after too many wrong passwords, nothing is
+/// checked. A request without a password isn't counted as a guess.
+/// @param req The request.
 bool authorized(httpd_req_t* req) {
   if (viaHotspot(req)) return true;  // joining it took the password on the screen
   char password[sizeof Settings::webPassword];
@@ -344,7 +442,12 @@ bool authorized(httpd_req_t* req) {
   return false;
 }
 
-// Answers a request authorized() turned down.
+/// @brief Answers a request authorized() turned down.
+///
+/// While passwords are refused: 429 with `Retry-After`. Otherwise 401, with
+/// the browser's password prompt only for requests not from the web page.
+/// @param req The request.
+/// @return ESP_OK, or an error to close the connection.
 esp_err_t refuse(httpd_req_t* req) {
   const uint32_t waitS = (guard.waitMs(millis()) + 999) / 1000;
   if (waitS > 0) {
@@ -372,14 +475,26 @@ esp_err_t refuse(httpd_req_t* req) {
 
 // ---------------------------------------------------------------- pages
 
+/// @brief `GET /`: the dashboard, or the setup page when reached through the
+/// setup hotspot.
+/// @param req The request.
+/// @return ESP_OK, or an error to close the connection.
 esp_err_t getRoot(httpd_req_t* req) {
   return sendAsset(req, viaHotspot(req) ? web_assets::kSetupHtml : web_assets::kIndexHtml);
 }
 
+/// @brief `GET /setup`: the setup page.
+/// @param req The request.
+/// @return ESP_OK, or an error to close the connection.
 esp_err_t getSetup(httpd_req_t* req) { return sendAsset(req, web_assets::kSetupHtml); }
 
-// Captive portal: whatever a phone probes for through the hotspot is
-// redirected to the setup page, which makes the phone open it.
+/// @brief Any other route: 404, or through the setup hotspot a redirect to
+/// the setup page.
+///
+/// That's the captive portal: whatever a phone probes for through the
+/// hotspot is redirected to the setup page, which makes the phone open it.
+/// @param req The request.
+/// @return ESP_OK, or an error to close the connection.
 esp_err_t notFound(httpd_req_t* req, httpd_err_code_t) {
   if (!viaHotspot(req)) return sendText(req, "404 Not Found", "Not found");
   IPAddress ip;
@@ -396,6 +511,13 @@ esp_err_t notFound(httpd_req_t* req, httpd_err_code_t) {
 
 // ---------------------------------------------------------------- state
 
+/// @brief `GET /api/state`: readings, levels and status, as JSON.
+///
+/// The monitor's name, version, uptime and why it last started; each value
+/// with its level and limits; the sensor's state; the battery (null without
+/// one); Wi-Fi; the Home Assistant connection; and wrong web passwords.
+/// @param req The request.
+/// @return ESP_OK, or an error to close the connection.
 esp_err_t getState(httpd_req_t* req) {
   Json root(cJSON_CreateObject());
   cJSON* r = root.get();
@@ -466,6 +588,15 @@ esp_err_t getState(httpd_req_t* req) {
   return sendJson(req, r);
 }
 
+/// @brief `GET /api/history?metric=<id>&range=hour|day|week`: one value's
+/// history, as JSON.
+///
+/// The hour comes in 10 s means, the day in 1 min means and the week in
+/// 5 min means: `step` is the time between them in s, `capacity` how many
+/// the range holds, and `values` those there are so far, oldest first, null
+/// where there was no data. Answers 400 for an unknown metric or range.
+/// @param req The request.
+/// @return ESP_OK, or an error to close the connection.
 esp_err_t getHistory(httpd_req_t* req) {
   char query[64] = "";
   char id[8] = "";
@@ -531,9 +662,13 @@ esp_err_t getHistory(httpd_req_t* req) {
   return httpd_resp_send_chunk(req, nullptr, 0);
 }
 
-// Every value's 1 min means, oldest first, as CSV. The monitor has no clock,
-// so the first column says how many seconds ago each minute started; the web
-// page turns that into times.
+/// @brief `GET /api/history.csv`: every value's 1 min means, oldest first, as
+/// CSV.
+///
+/// The monitor has no clock, so the first column says how many seconds ago
+/// each minute started; the web page turns that into times.
+/// @param req The request.
+/// @return ESP_OK, or an error to close the connection.
 esp_err_t getHistoryCsv(httpd_req_t* req) {
   using Coarse = aq::MetricHistory::Coarse;
   static constexpr const char* kColumns[aq::kMetricCount] = {
@@ -598,6 +733,10 @@ esp_err_t getHistoryCsv(httpd_req_t* req) {
 
 // ---------------------------------------------------------------- settings
 
+/// @brief Adds the settings to a JSON object; the web password only as
+/// whether one is set.
+/// @param r The object.
+/// @param s The settings.
 void addSettings(cJSON* r, const Settings& s) {
   cJSON_AddStringToObject(r, "name", s.name);
   cJSON_AddNumberToObject(r, "brightness", s.brightness);
@@ -613,6 +752,9 @@ void addSettings(cJSON* r, const Settings& s) {
   cJSON_AddBoolToObject(r, "passwordSet", s.webPassword[0] != '\0');
 }
 
+/// @brief `GET /api/settings`: the settings, as JSON.
+/// @param req The request.
+/// @return ESP_OK, or an error to close the connection.
 esp_err_t getSettings(httpd_req_t* req) {
   Json root(cJSON_CreateObject());
   {
@@ -622,6 +764,8 @@ esp_err_t getSettings(httpd_req_t* req) {
   return sendJson(req, root.get());
 }
 
+/// @brief Whether text is all printable ASCII.
+/// @param text The text.
 bool printable(const char* text) {
   for (const char* c = text; *c != '\0'; ++c) {
     if (*c < 0x20 || *c > 0x7e) return false;
@@ -629,7 +773,10 @@ bool printable(const char* text) {
   return true;
 }
 
-// Applies the fields present in `json` to `s`; returns what's wrong, if anything.
+/// @brief Applies the settings present in `json` to `s`.
+/// @param json The request.
+/// @param[in,out] s The settings to change.
+/// @return nullptr, or what's wrong, for people.
 const char* parseSettings(const cJSON* json, Settings& s) {
   const cJSON* f;
   if (const char* name = stringField(json, "name")) {
@@ -713,6 +860,12 @@ const char* parseSettings(const cJSON* json, Settings& s) {
   return nullptr;
 }
 
+/// @brief `POST /api/settings` (web password): changes the settings present
+/// in the JSON body.
+///
+/// Answers with all the settings, or 400 and what's wrong, changing none.
+/// @param req The request.
+/// @return ESP_OK, or an error to close the connection.
 esp_err_t postSettings(httpd_req_t* req) {
   if (!authorized(req)) return refuse(req);
   const Json json = readJson(req);
@@ -733,6 +886,15 @@ esp_err_t postSettings(httpd_req_t* req) {
   return error ? badRequest(req, error) : sendJson(req, reply.get());
 }
 
+/// @brief `POST /api/action` (web password): one of the sensor's commands, or
+/// a restart.
+///
+/// The body is `{"action": ...}` with `cleanFan`, `heatHumiditySensor`,
+/// `calibrateCo2` (with `"ppm"`, 350 to 2000), `resetCo2Calibration`,
+/// `restartVocLearning`, `clearErrors` or `restart`. Answers 204, or 400 and
+/// what's wrong.
+/// @param req The request.
+/// @return ESP_OK, or an error to close the connection.
 esp_err_t postAction(httpd_req_t* req) {
   if (!authorized(req)) return refuse(req);
   const Json json = readJson(req);
@@ -764,7 +926,9 @@ esp_err_t postAction(httpd_req_t* req) {
 
 // ---------------------------------------------------------------- Wi-Fi
 
-// A saved network's fixed address, or null for DHCP.
+/// @brief Adds a saved network's fixed address to its JSON, or null for DHCP.
+/// @param item The network's JSON.
+/// @param a The address.
 void addAddress(cJSON* item, const FixedAddress& a) {
   if (!a.set()) {
     cJSON_AddNullToObject(item, "address");
@@ -783,6 +947,12 @@ void addAddress(cJSON* item, const FixedAddress& a) {
   }
 }
 
+/// @brief `GET /api/wifi`: Wi-Fi, as JSON.
+///
+/// Its state, the saved networks, the last scan and the setup's progress;
+/// through the setup hotspot also the web password.
+/// @param req The request.
+/// @return ESP_OK, or an error to close the connection.
 esp_err_t getWifi(httpd_req_t* req) {
   const bool hotspot = viaHotspot(req);
   Json root(cJSON_CreateObject());
@@ -828,7 +998,10 @@ esp_err_t getWifi(httpd_req_t* req) {
   return sendJson(req, r);
 }
 
-// Network name, password and hidden flag from a request.
+/// @brief Reads a network's name, password and hidden flag from a request.
+/// @param json The request.
+/// @param[out] network The network.
+/// @return nullptr, or what's wrong, for people.
 const char* parseNetwork(const cJSON* json, WifiCredentials& network) {
   const char* ssid = stringField(json, "ssid");
   const char* password = stringField(json, "password");
@@ -846,7 +1019,12 @@ const char* parseNetwork(const cJSON* json, WifiCredentials& network) {
   return nullptr;
 }
 
-// A fixed address from a request; an empty or missing "ip" means DHCP.
+/// @brief Reads a fixed address from a request; an empty or missing "ip"
+/// means DHCP.
+/// @param json The request.
+/// @param[out] out The address; FixedAddress() for DHCP, or if something's
+///   wrong.
+/// @return nullptr, or what's wrong, for people.
 const char* parseAddress(const cJSON* json, FixedAddress& out) {
   out = FixedAddress();
   const char* ip = stringField(json, "ip");
@@ -870,7 +1048,10 @@ const char* parseAddress(const cJSON* json, FixedAddress& out) {
   return nullptr;
 }
 
-// Runs a POST /api/wifi action under AppLock; returns what's wrong, if anything.
+/// @brief Runs a `POST /api/wifi` action; call under AppLock.
+/// @param action The action.
+/// @param json The request, with what the action needs.
+/// @return nullptr, or what's wrong, for people.
 const char* wifiAction(const char* action, const cJSON* json) {
   WifiService& w = *ctx.wifi;
   if (strcmp(action, "scan") == 0) {
@@ -901,6 +1082,16 @@ const char* wifiAction(const char* action, const cJSON* json) {
   return nullptr;
 }
 
+/// @brief `POST /api/wifi` (web password): changes the saved networks, or
+/// runs the setup.
+///
+/// The body is `{"action": ...}` with `scan`; `connect` (only during setup)
+/// or `save`, with `"ssid"`, `"password"` and `"hidden"`; `forget`, with
+/// `"ssid"`; `address`, with `"ssid"`, `"ip"`, `"subnet"`, `"gateway"` and
+/// `"dns"`; or `finish`, which closes the setup hotspot. Answers 204, or 400
+/// and what's wrong.
+/// @param req The request.
+/// @return ESP_OK, or an error to close the connection.
 esp_err_t postWifi(httpd_req_t* req) {
   if (!authorized(req)) return refuse(req);
   const Json json = readJson(req);
@@ -916,6 +1107,11 @@ esp_err_t postWifi(httpd_req_t* req) {
 
 // ---------------------------------------------------------------- Home Assistant
 
+/// @brief Adds the Home Assistant settings and the connection's state to a
+/// JSON object; the password only as whether one is set.
+/// @param r The object.
+/// @param s The settings.
+/// @param mqtt The MQTT client.
 void addMqtt(cJSON* r, const Settings& s, const MqttService& mqtt) {
   cJSON_AddBoolToObject(r, "enabled", s.mqttEnabled);
   cJSON_AddStringToObject(r, "host", s.mqttHost);
@@ -925,6 +1121,10 @@ void addMqtt(cJSON* r, const Settings& s, const MqttService& mqtt) {
   addMqttState(r, mqtt);
 }
 
+/// @brief `GET /api/mqtt`: the Home Assistant broker settings and the
+/// connection's state, as JSON.
+/// @param req The request.
+/// @return ESP_OK, or an error to close the connection.
 esp_err_t getMqtt(httpd_req_t* req) {
   Json root(cJSON_CreateObject());
   {
@@ -934,7 +1134,10 @@ esp_err_t getMqtt(httpd_req_t* req) {
   return sendJson(req, root.get());
 }
 
-// Applies the fields present in `json` to `s`; returns what's wrong, if anything.
+/// @brief Applies the Home Assistant settings present in `json` to `s`.
+/// @param json The request.
+/// @param[in,out] s The settings to change.
+/// @return nullptr, or what's wrong, for people.
 const char* parseMqtt(const cJSON* json, Settings& s) {
   const cJSON* f;
   if ((f = field(json, "enabled"))) {
@@ -973,6 +1176,12 @@ const char* parseMqtt(const cJSON* json, Settings& s) {
   return nullptr;
 }
 
+/// @brief `POST /api/mqtt` (web password): changes the Home Assistant
+/// settings present in the JSON body.
+///
+/// Answers like `GET /api/mqtt`, or 400 and what's wrong, changing none.
+/// @param req The request.
+/// @return ESP_OK, or an error to close the connection.
 esp_err_t postMqtt(httpd_req_t* req) {
   if (!authorized(req)) return refuse(req);
   const Json json = readJson(req);
@@ -994,10 +1203,18 @@ esp_err_t postMqtt(httpd_req_t* req) {
 
 // ---------------------------------------------------------------- firmware
 
+/// @brief `GET /api/auth`: 204 if the request carries the web password (or
+/// needs none); otherwise as refuse() answers.
+/// @param req The request.
+/// @return ESP_OK, or an error to close the connection.
 esp_err_t getAuth(httpd_req_t* req) {
   return authorized(req) ? sendOk(req) : refuse(req);
 }
 
+/// @brief `GET /api/ota`: an update's state and, while it waits for the
+/// monitor, the seconds left to answer there, as JSON.
+/// @param req The request.
+/// @return ESP_OK, or an error to close the connection.
 esp_err_t getOta(httpd_req_t* req) {
   Json root(cJSON_CreateObject());
   cJSON_AddStringToObject(root.get(), "state", otaStateId(ctx.ota->state()));
@@ -1005,6 +1222,13 @@ esp_err_t getOta(httpd_req_t* req) {
   return sendJson(req, root.get());
 }
 
+/// @brief `POST /api/ota` (web password): a firmware image as the body,
+/// written to flash as it arrives (see Ota).
+///
+/// Answers 202 once it's stored, saying how to confirm it on the monitor, or
+/// 400 and why it failed.
+/// @param req The request.
+/// @return ESP_OK, or an error to close the connection, e.g. when it was lost.
 esp_err_t postOta(httpd_req_t* req) {
   if (!authorized(req)) return refuse(req);
   if (const char* error = ctx.ota->start(req->content_len)) return badRequest(req, error);

@@ -1,0 +1,52 @@
+# Doxygen settings for the firmware's code documentation. Run `doxygen` in this
+# folder; the pages end up in .doxygen/html/index.html (git-ignored). Only the
+# settings that differ from Doxygen's defaults are here. With Graphviz
+# installed, the pages also get class and include diagrams. The screen
+# renderer has its own settings, in tools/screen-renderer.
+
+PROJECT_NAME           = "SEN69C Air Monitor"
+PROJECT_BRIEF          = "Firmware for an air-quality monitor: ESP32-S3 Reverse TFT Feather and Sensirion SEN69C"
+OUTPUT_DIRECTORY       = .doxygen
+
+INPUT                  = README.md THIRD_PARTY_NOTICES.md src lib test
+USE_MDFILE_AS_MAINPAGE = README.md
+# Section links as GitHub makes them, e.g. #what-you-need.
+MARKDOWN_ID_STYLE      = GITHUB
+FILE_PATTERNS          = *.h *.cpp
+RECURSIVE              = YES
+# Generated from web/ at build time.
+EXCLUDE                = src/web
+STRIP_FROM_PATH        = .
+STRIP_FROM_INC_PATH    = src lib/aqcore/src lib/netcore/src lib/powercore/src
+
+# A one-line /// comment is a brief description; a longer one starts with
+# @brief.
+JAVADOC_AUTOBRIEF      = NO
+QT_AUTOBRIEF           = NO
+MULTILINE_CPP_IS_BRIEF = NO
+
+# Private members and file-local helpers are documented in the code, but the
+# pages show the interfaces.
+EXTRACT_ALL            = NO
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = YES
+EXTRACT_ANON_NSPACES   = NO
+SOURCE_BROWSER         = YES
+
+# The Arduino and ESP-IDF macros the code uses.
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = YES
+PREDEFINED             = RTC_DATA_ATTR= IRAM_ATTR= ARDUINO=10000 FW_VERSION=\"dev\"
+
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = YES
+WARN_IF_DOC_ERROR      = YES
+WARN_IF_INCOMPLETE_DOC = YES
+WARN_NO_PARAMDOC       = NO
+
+GENERATE_LATEX         = NO
+HAVE_DOT               = YES
+DOT_IMAGE_FORMAT       = svg
+CALL_GRAPH             = NO
+CALLER_GRAPH           = NO

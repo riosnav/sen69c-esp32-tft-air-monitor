@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+/// @file
+/// @brief Loading and saving the settings and the battery's state with
+/// Preferences, in the NVS namespace `settings` (see Settings.h).
+
 #include "Settings.h"
 
 #include <Preferences.h>
@@ -11,8 +15,8 @@
 namespace settings {
 
 namespace {
-constexpr const char* kNamespace = "settings";
-constexpr size_t kWebPasswordLength = 8;
+constexpr const char* kNamespace = "settings";  ///< The NVS namespace for all of it.
+constexpr size_t kWebPasswordLength = 8;  ///< The random web password's length.
 }  // namespace
 
 Settings load() {

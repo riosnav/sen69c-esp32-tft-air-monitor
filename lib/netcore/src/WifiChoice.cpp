@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+/// @file
+/// @brief Choosing which saved Wi-Fi networks to try (see WifiChoice.h).
+
 #include "WifiChoice.h"
 
 #include <algorithm>

@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+/// @file
+/// @brief The sensor task: running the SEN69C and its maintenance operations,
+/// and reading the battery monitor (see SensorService.h).
+
 #include "SensorService.h"
 
 #include <Wire.h>
@@ -9,77 +13,119 @@
 
 namespace {
 
-// The settings the sensor was last given (the altitude it confirmed, and CO2
-// self-calibration), in memory that survives restarts of the ESP32 but not
-// power cuts, like the sensor's own settings. They stay valid when the sensor
-// keeps measuring across a restart.
+/// @brief The settings the sensor was last given (the altitude it confirmed,
+/// and CO2 self-calibration), as pack() makes them.
+///
+/// Kept in memory that survives restarts of the ESP32 but not power cuts, like
+/// the sensor's own settings. They stay valid when the sensor keeps measuring
+/// across a restart.
 RTC_NOINIT_ATTR uint32_t sensorSettings;
-RTC_NOINIT_ATTR uint32_t sensorSettingsCheck;  // tells saved settings from leftover garbage
-constexpr uint32_t kSettingsKey = 0x5A17C0DE;
+RTC_NOINIT_ATTR uint32_t sensorSettingsCheck;  ///< Tells saved settings from leftover garbage.
+constexpr uint32_t kSettingsKey = 0x5A17C0DE;  ///< Mixed into sensorSettingsCheck.
 
+/// @brief Packs the settings the sensor keeps into one word.
+/// @param altitudeM The altitude, in m.
+/// @param co2SelfCalibration Whether CO2 self-calibration is on.
+/// @return The altitude in the low 16 bits, self-calibration in bit 16.
 uint32_t pack(uint16_t altitudeM, bool co2SelfCalibration) {
   return altitudeM | (co2SelfCalibration ? 1u << 16 : 0);
 }
+/// @brief Saves the settings the sensor was given and confirmed.
+/// @param settings The settings, as pack() makes them.
 void remember(uint32_t settings) {
   sensorSettings = settings;
   sensorSettingsCheck = settings ^ kSettingsKey;
 }
+/// Marks the saved settings invalid, before the sensor is given new ones.
 void forgetSettings() { sensorSettingsCheck = ~(sensorSettings ^ kSettingsKey); }
+/// @brief Whether these are the settings saved, and still valid.
+/// @param settings The settings, as pack() makes them.
 bool remembered(uint32_t settings) {
   return sensorSettings == settings && sensorSettingsCheck == (settings ^ kSettingsKey);
 }
 
-constexpr uint8_t kAddrMax17048 = 0x36;
-// The MAX17048's power-on HIBRT: it hibernates (about 3 uA instead of 23 uA)
-// while the battery is hardly used.
+constexpr uint8_t kAddrMax17048 = 0x36;  ///< The battery monitor's I2C address.
+/// The MAX17048's power-on HIBRT: it hibernates (about 3 uA instead of 23 uA)
+/// while the battery is hardly used.
 constexpr uint16_t kGaugeHibernateDefault = 0x8030;
-// Raw values the SEN69C returns while a measurement isn't available yet.
+/// Raw unsigned value the SEN69C returns while a measurement isn't available yet.
 constexpr uint16_t kUnknownU16 = 0xFFFF;
-constexpr int16_t kUnknownI16 = 0x7FFF;
-// Stopping too soon after a start upsets the sensor. In the first 24 s it
-// causes a CO2 error. And the VOC and NOx algorithms only take their starting
-// point after about 45 s of measuring (they show "--" until then): stopped
-// earlier, they take it from the unsettled readings after the restart and
-// report nonsense (NOx near 500, VOC 1) until they have relearned.
+constexpr int16_t kUnknownI16 = 0x7FFF;  ///< The same for a signed value.
+/// @brief The shortest a measurement runs before it's stopped, in ms: stopping
+/// too soon after a start upsets the sensor.
+///
+/// In the first 24 s it causes a CO2 error. And the VOC and NOx algorithms
+/// only take their starting point after about 45 s of measuring (they show
+/// `--` until then): stopped earlier, they take it from the unsettled readings
+/// after the restart and report nonsense (NOx near 500, VOC 1) until they have
+/// relearned.
 constexpr uint32_t kMinRunMs = 60000;
-constexpr uint32_t kFanCleaningMs = 10000;
-// The humidity sensor's heater runs for 1 s. Firmware older than 9.0 is busy
-// for 1.3 s after the command; newer firmware reports when it's done. The
-// temperature reading needs 20 s to settle afterwards.
+constexpr uint32_t kFanCleaningMs = 10000;  ///< How long the fan cleaning runs, in ms.
+/// @brief The first firmware version (major part) that reports when the
+/// heater is done.
+///
+/// The humidity sensor's heater runs for 1 s. Firmware older than 9.0 is busy
+/// for 1.3 s after the command; newer firmware reports when it's done. The
+/// temperature reading needs 20 s to settle afterwards.
 constexpr uint8_t kHeaterReportsFromFirmware = 9;
-constexpr uint32_t kHeaterBusyMs = 1300;
-constexpr uint32_t kHeaterPollMs = 50;
-constexpr uint32_t kHeaterMaxMs = 3000;
-constexpr uint32_t kHeaterSettleMs = 20000;
-// PM readings are only stable 30 s after a measurement starts (datasheet);
-// earlier ones often overshoot and would raise false alerts.
+constexpr uint32_t kHeaterBusyMs = 1300;  ///< How long older firmware is busy, in ms.
+constexpr uint32_t kHeaterPollMs = 50;  ///< How often to ask newer firmware, in ms.
+constexpr uint32_t kHeaterMaxMs = 3000;  ///< The longest to wait for its answer, in ms.
+constexpr uint32_t kHeaterSettleMs = 20000;  ///< For the temperature reading to settle, in ms.
+/// PM readings are only stable 30 s after a measurement starts (datasheet);
+/// earlier ones often overshoot and would raise false alerts.
 constexpr uint32_t kPmStartupMs = 30000;
-constexpr uint32_t kPowerUpMs = 150;
+constexpr uint32_t kPowerUpMs = 150;  ///< For the just-powered STEMMA QT port to come up, in ms.
+/// How often to look for a new measurement, in ms; commands are handled at once.
 constexpr uint32_t kPollMs = 200;
-constexpr uint32_t kStatusIntervalMs = 10000;
-// Often enough that the voltage jumps from one reading to the next when USB
-// power is plugged in or unplugged (see power::BatteryWatch).
+constexpr uint32_t kStatusIntervalMs = 10000;  ///< How often to read the device status, in ms.
+/// @brief How often to read the battery monitor, in ms.
+///
+/// Often enough that the voltage jumps from one reading to the next when USB
+/// power is plugged in or unplugged (see power::BatteryWatch).
 constexpr uint32_t kBatteryIntervalMs = 5000;
+/// How long to wait before looking for the sensor or starting it again, in ms.
 constexpr uint32_t kRetryMs = 5000;
-// After this many failed reads in a row, look for the sensor again.
+/// After this many failed reads in a row, look for the sensor again.
 constexpr uint32_t kMaxConsecutiveErrors = 10;
 
+/// @brief A raw unsigned value in its units.
+/// @param raw The raw value.
+/// @param divisor What it's divided by.
+/// @return The value; NaN if not available yet (kUnknownU16).
 float scaled(uint16_t raw, float divisor) { return raw == kUnknownU16 ? NAN : raw / divisor; }
+/// @brief A raw signed value in its units.
+/// @param raw The raw value.
+/// @param divisor What it's divided by.
+/// @return The value; NaN if not available yet (kUnknownI16).
 float scaled(int16_t raw, float divisor) { return raw == kUnknownI16 ? NAN : raw / divisor; }
-// The VOC and NOx indices run from 1 to 500. For a while after a measurement
-// starts, the sensor reports 0 rather than unknown: its gas algorithm is
-// still starting up.
+/// @brief A raw VOC or NOx index as the index; NaN while not available.
+///
+/// The VOC and NOx indices run from 1 to 500. For a while after a measurement
+/// starts, the sensor reports 0 rather than unknown: its gas algorithm is
+/// still starting up.
+/// @param raw The raw value: the index times 10.
+/// @return The index, or NaN.
 float gasIndex(int16_t raw) { return raw < 10 ? NAN : scaled(raw, 10); }
 
+/// Holds a FreeRTOS mutex for as long as it exists.
 class Lock {
  public:
+  /// @brief Takes the mutex, waiting as long as that takes.
+  /// @param mutex The mutex.
   explicit Lock(SemaphoreHandle_t mutex) : mutex_(mutex) { xSemaphoreTake(mutex_, portMAX_DELAY); }
+  /// Gives the mutex back.
   ~Lock() { xSemaphoreGive(mutex_); }
 
  private:
   SemaphoreHandle_t mutex_;
 };
 
+/// @brief Reads a 16-bit register, high byte first.
+/// @param address The device's I2C address.
+/// @param reg The register.
+/// @param[out] value What it holds.
+/// @return Whether that worked.
 bool readRegister16(uint8_t address, uint8_t reg, uint16_t& value) {
   Wire.beginTransmission(address);
   Wire.write(reg);
@@ -90,6 +136,11 @@ bool readRegister16(uint8_t address, uint8_t reg, uint16_t& value) {
   return true;
 }
 
+/// @brief Writes a 16-bit register, high byte first.
+/// @param address The device's I2C address.
+/// @param reg The register.
+/// @param value What to write.
+/// @return Whether that worked.
 bool writeRegister16(uint8_t address, uint8_t reg, uint16_t value) {
   Wire.beginTransmission(address);
   Wire.write(reg);
@@ -271,7 +322,6 @@ void SensorService::applyTemperatureOffset() {
   sen_.setTemperatureOffsetParameters(offset, 0, 0, 0);
 }
 
-// Only while the sensor is idle.
 bool SensorService::runHeater() {
   uint8_t firmwareMajor;
   {

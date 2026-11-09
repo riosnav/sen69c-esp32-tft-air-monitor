@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+/// @file
+/// @brief Reading, writing and checking IPv4 addresses (see Ipv4.h).
+
 #include "Ipv4.h"
 
 #include <cstdio>
@@ -8,7 +11,9 @@ namespace net {
 
 namespace {
 
-// Not 0.x.x.x, loopback (127.x.x.x), multicast or reserved (224.0.0.0 and up).
+/// @brief Whether an address can be a single device's: not 0.x.x.x,
+/// loopback (127.x.x.x), multicast or reserved (224.0.0.0 and up).
+/// @param address The address.
 bool unicast(uint32_t address) {
   const uint32_t first = address >> 24;
   return first != 0 && first != 127 && first < 224;

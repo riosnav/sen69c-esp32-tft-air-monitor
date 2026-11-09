@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// SEN69C air-quality monitor: wires the sensor task, the air-quality logic,
-// the history, the UI, Wi-Fi, the web server and Home Assistant (MQTT)
-// together. Everything but the network parts works offline.
+
+/// @file
+/// @brief SEN69C air-quality monitor: wires the sensor task, the air-quality
+/// logic, the history, the UI, Wi-Fi, the web server and Home Assistant (MQTT)
+/// together.
+///
+/// Everything but the network parts works offline.
 
 #include <AirQuality.h>
 #include <Arduino.h>
@@ -25,25 +28,35 @@
 
 namespace {
 
-constexpr uint32_t kLogIntervalMs = 10000;
-// How long the screen says why, before switching off.
+constexpr uint32_t kLogIntervalMs = 10000;  ///< How often logMeasurement() runs, in ms.
+/// How long the screen says why, before switching off for an empty battery, in ms.
 constexpr uint32_t kEmptyMessageMs = 5000;
-// The sensor task may be busy for a while, e.g. heating the humidity sensor.
+/// @brief How long to wait for the sensor task to stop before switching off,
+/// in ms.
+///
+/// The sensor task may be busy for a while, e.g. heating the humidity sensor.
 constexpr uint32_t kSensorStopMs = 2000;
 
-// Owned by the main loop; the web server reaches them under AppLock.
-Settings userSettings;
-SensorService sensor;
-SensorSnapshot latest;
-aq::AirQuality airQuality;
-aq::MetricHistory* history = nullptr;
-WifiService wifi;
-Ota ota;
-MqttService mqtt;
-power::BatteryWatch battery;
-Ui ui;
+/// @name The main loop's state
+/// Owned by the main loop; the web server reaches them under AppLock.
+/// @{
+Settings userSettings;                 ///< The user's settings.
+SensorService sensor;                  ///< The SEN69C and the battery monitor, in their own task.
+SensorSnapshot latest;                 ///< The sensor task's latest readings.
+aq::AirQuality airQuality;             ///< Every metric's level, and the overall one.
+aq::MetricHistory* history = nullptr;  ///< For the trend graphs; see createHistory().
+WifiService wifi;                      ///< Wi-Fi, and the setup hotspot.
+Ota ota;                               ///< Firmware updates over Wi-Fi.
+MqttService mqtt;                      ///< Home Assistant, over MQTT.
+power::BatteryWatch battery;           ///< What the battery monitor's readings mean.
+Ui ui;                                 ///< The screen, the buttons and the LED.
+/// @}
 
-// The history is ~420 KB, more than the whole internal RAM: it needs the PSRAM.
+/// @brief Creates the history in PSRAM: at ~420 KB, it's more than the
+/// internal RAM has free.
+///
+/// Stops the monitor (abort()) if there isn't enough PSRAM.
+/// @return The history.
 aq::MetricHistory* createHistory() {
   void* memory = ps_malloc(sizeof(aq::MetricHistory));
   if (memory == nullptr) {
@@ -53,6 +66,8 @@ aq::MetricHistory* createHistory() {
   return new (memory) aq::MetricHistory();
 }
 
+/// @brief A word for the MQTT state, for the serial log.
+/// @param state The state.
 const char* mqttText(MqttState state) {
   switch (state) {
     case MqttState::Waiting:
@@ -68,6 +83,8 @@ const char* mqttText(MqttState state) {
   }
 }
 
+/// @brief A word for the Wi-Fi state, for the serial log.
+/// @param state The state.
 const char* wifiText(WifiState state) {
   switch (state) {
     case WifiState::Searching:
@@ -81,6 +98,9 @@ const char* wifiText(WifiState state) {
   }
 }
 
+/// @brief Logs the readings to serial: every metric, the overall air quality,
+/// Wi-Fi, MQTT and the free memory.
+/// @param s The readings.
 void logMeasurement(const SensorSnapshot& s) {
   using aq::Metric;
   static const char* const kLevels[] = {"unknown", "good", "warning", "alarm"};
@@ -97,6 +117,11 @@ void logMeasurement(const SensorSnapshot& s) {
 
 }  // namespace
 
+/// @brief Starts the monitor, unless power::begin() sends it back to sleep.
+///
+/// Loads the settings and starts the history, the sensor, Wi-Fi, MQTT, the
+/// battery's state and the UI. The web server starts later, in loop(), once
+/// there's a network.
 void setup() {
   Serial.begin(115200);
   power::begin();  // after switching off for an empty battery, may sleep again
@@ -123,6 +148,13 @@ void setup() {
   ui.begin(sensor, userSettings, airQuality, *history, wifi, ota, mqtt, battery);
 }
 
+/// @brief One pass of the main loop, with a 5 ms pause after it.
+///
+/// Under AppLock: takes new readings into the levels and the history, runs
+/// Wi-Fi, OTA, MQTT, the battery's state and the UI, starts the web server
+/// once there's a network, and logs the readings every kLogIntervalMs. Then,
+/// without the lock, switches off if the battery is empty or the menu asked
+/// for it, and restarts if sys::restartLater() asked for that.
 void loop() {
   static uint32_t lastSequence = 0;
   static uint32_t lastBatterySequence = 0;

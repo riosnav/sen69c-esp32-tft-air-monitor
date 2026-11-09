@@ -5,6 +5,9 @@ platformio_override.ini
 # Generated from web/ at build time
 src/web/WebAssets.h
 
+# Code documentation (doxygen)
+.doxygen/
+
 # Screen renderer output, if written next to it
 tools/screen-renderer/shots/
 

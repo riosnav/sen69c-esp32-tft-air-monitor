@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+/// @file
+/// @brief Home Assistant over MQTT: the client, the discovery announcement,
+/// the readings and the Silence select (see MqttService.h).
+
 #include "MqttService.h"
 
 #include <Arduino.h>
@@ -16,34 +20,48 @@ using aq::Metric;
 
 namespace {
 
-constexpr uint32_t kStateIntervalMs = 30000;
-// After announcing, Home Assistant needs a moment to create the sensors before
-// it listens to their readings.
+constexpr uint32_t kStateIntervalMs = 30000;  ///< How often the readings are published, in ms.
+/// @brief The delay of the first readings after announcing, in ms.
+///
+/// After announcing, Home Assistant needs a moment to create the sensors
+/// before it listens to their readings.
 constexpr uint32_t kFirstStateDelayMs = 2000;
-constexpr uint32_t kStartRetryMs = 60000;  // if the client couldn't even be created
-// The broker announces "offline" about 1.5 keepalives after losing us.
+/// The wait before starting again if the client couldn't even be created, in ms.
+constexpr uint32_t kStartRetryMs = 60000;
+/// @brief The MQTT keepalive, in s.
+///
+/// The broker announces "offline" about 1.5 keepalives after losing us.
 constexpr int kKeepaliveS = 60;
-// Also bounds how long stopping the client can take while it's connecting.
+/// @brief The client's network timeout, in ms.
+///
+/// Also bounds how long stopping the client can take while it's connecting.
 constexpr int kNetworkTimeoutMs = 5000;
-// Wait before trying again after losing the broker, e.g. when Wi-Fi rejoins
-// (the client's default of 10 s kept Home Assistant waiting 15 s).
+/// @brief Wait before trying again after losing the broker, e.g. when Wi-Fi
+/// rejoins, in ms.
+///
+/// Shorter than the client's default of 10 s, so Home Assistant isn't kept
+/// waiting for the monitor.
 constexpr int kReconnectMs = 3000;
-constexpr int kOutBufferBytes = 8192;  // holds the ~4.2 KB discovery message
-constexpr const char* kDiscoveryPrefix = "homeassistant";
+/// The client's send buffer, in bytes: holds the ~4.2 KB discovery message.
+constexpr int kOutBufferBytes = 8192;
+constexpr const char* kDiscoveryPrefix = "homeassistant";  ///< Home Assistant's discovery topics.
 
-// How Home Assistant shows each metric, in the order of aq::Metric. Units are
-// spelled the way Home Assistant spells them (with a Greek mu), or it keeps no
-// long-term statistics for them.
+/// How Home Assistant shows a metric (see kSensors).
 struct SensorInfo {
-  const char* name;
-  const char* deviceClass;  // nullptr where none fits
-  const char* unit;         // nullptr for the indices
-  const char* icon;         // for those without a device class
-  int displayDecimals;
-  // Its Good/Fair/Poor sensor; nullptr for the values without limits.
+  const char* name;         ///< The sensor's name.
+  const char* deviceClass;  ///< nullptr where none fits.
+  const char* unit;         ///< nullptr for the indices.
+  const char* icon;         ///< For those without a device class.
+  int displayDecimals;      ///< How many decimals Home Assistant shows.
+  /// Its Good/Fair/Poor sensor's name; nullptr for the values without limits.
   const char* statusName;
 };
+/// Micrograms per cubic metre, spelled with a Greek mu (see kSensors).
 constexpr const char* kMicrograms = "\xCE\xBCg/m\xC2\xB3";
+/// @brief How Home Assistant shows each metric, in the order of aq::Metric.
+///
+/// Units are spelled the way Home Assistant spells them (with a Greek mu), or
+/// it keeps no long-term statistics for them.
 constexpr SensorInfo kSensors[aq::kMetricCount] = {
     {"PM1", "pm1", kMicrograms, nullptr, 1, nullptr},
     {"PM2.5", "pm25", kMicrograms, nullptr, 1, "PM2.5 status"},
@@ -58,11 +76,14 @@ constexpr SensorInfo kSensors[aq::kMetricCount] = {
     {"Humidity", "humidity", "%", nullptr, 0, "Humidity status"},
 };
 
-// Air quality levels, named as on the web page.
+/// Air quality levels, named as on the web page.
 const char* const kAirLevels[] = {"Good", "Fair", "Poor"};
-// In the order of Silence.
+/// The Silence select's options, in the order of Silence.
 const char* const kSilenceOptions[] = {"Off", "Warnings", "All"};
 
+/// @brief A level's name, as on the web page.
+/// @param level The level.
+/// @return "Good", "Fair" or "Poor"; nullptr for none.
 const char* airText(Level level) {
   switch (level) {
     case Level::Good:
@@ -76,9 +97,17 @@ const char* airText(Level level) {
   }
 }
 
-// An entity of the discovery message (`platform` "sensor", "select"...),
-// reading `path` of the state JSON. Keys are abbreviated where Home Assistant
-// allows it, to keep the message small.
+/// @brief Adds an entity to the discovery message, reading `path` of the
+/// state JSON.
+///
+/// Keys are abbreviated where Home Assistant allows it, to keep the message
+/// small.
+/// @param components The message's components.
+/// @param platform The entity's kind: "sensor", "select"...
+/// @param key Its key, which also makes its unique ID.
+/// @param name The name Home Assistant shows.
+/// @param path What it reads from the state JSON, e.g. `levels.co2`.
+/// @return The entity, to add more to.
 cJSON* addComponent(cJSON* components, const char* platform, const char* key, const char* name,
                     const char* path) {
   cJSON* c = cJSON_AddObjectToObject(components, key);
@@ -92,11 +121,23 @@ cJSON* addComponent(cJSON* components, const char* platform, const char* key, co
   return c;
 }
 
+/// @brief Adds a sensor to the discovery message (see addComponent()).
+/// @param components The message's components.
+/// @param key Its key, which also makes its unique ID.
+/// @param name The name Home Assistant shows.
+/// @param path What it reads from the state JSON.
+/// @return The sensor, to add more to.
 cJSON* addSensor(cJSON* components, const char* key, const char* name, const char* path) {
   return addComponent(components, "sensor", key, name, path);
 }
 
-// A Good/Fair/Poor sensor.
+/// @brief Adds a Good/Fair/Poor sensor to the discovery message.
+/// @param components The message's components.
+/// @param key Its key, which also makes its unique ID.
+/// @param name The name Home Assistant shows.
+/// @param path What it reads from the state JSON, e.g. `levels.co2`.
+/// @param icon Its icon, e.g. `mdi:traffic-light`.
+/// @return The sensor.
 cJSON* addLevelSensor(cJSON* components, const char* key, const char* name, const char* path,
                       const char* icon) {
   cJSON* c = addSensor(components, key, name, path);
@@ -106,6 +147,10 @@ cJSON* addLevelSensor(cJSON* components, const char* key, const char* name, cons
   return c;
 }
 
+/// @brief Whether the time `atMs` has come, also across millis() wrapping
+/// around.
+/// @param nowMs The time, as millis().
+/// @param atMs The time it's due, as millis().
 bool due(uint32_t nowMs, uint32_t atMs) { return static_cast<int32_t>(nowMs - atMs) >= 0; }
 
 }  // namespace
@@ -349,7 +394,6 @@ void MqttService::logChanges() {
   if (now == MqttState::Failed) Serial.printf("MQTT: %s\n", error());
 }
 
-// Runs in the client's task.
 void MqttService::onEvent(void* self, esp_event_base_t, int32_t id, void* data) {
   MqttService& mqtt = *static_cast<MqttService*>(self);
   const auto* event = static_cast<const esp_mqtt_event_t*>(data);

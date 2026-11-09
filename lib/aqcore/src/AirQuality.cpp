@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+/// @file
+/// @brief Health levels and the overall air quality: the default limits, with
+/// their sources, and the hysteresis (see AirQuality.h).
+
 #include "AirQuality.h"
 
 namespace aq {

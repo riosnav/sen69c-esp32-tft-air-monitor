@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+/// @file
+/// @brief The deferred restart (see System.h).
+
 #include "System.h"
 
 #include <Arduino.h>
@@ -9,8 +12,8 @@
 namespace sys {
 
 namespace {
-std::atomic<bool> pending{false};
-std::atomic<uint32_t> restartAtMs{0};
+std::atomic<bool> pending{false};      ///< Whether a restart is due.
+std::atomic<uint32_t> restartAtMs{0};  ///< When, as millis().
 }  // namespace
 
 void restartLater(uint32_t delayMs) {

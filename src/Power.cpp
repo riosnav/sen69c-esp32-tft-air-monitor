@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+/// @file
+/// @brief Switching off and on again: deep sleep, waking up, and the battery
+/// check while switched off for an empty battery (see Power.h).
+
 #include "Power.h"
 
 #include <Arduino.h>
@@ -17,26 +21,28 @@ namespace power {
 
 namespace {
 
-constexpr uint8_t kAddrMax17048 = 0x36;
-constexpr uint32_t kRailMs = 10;      // for the I2C rail to come up
-constexpr uint32_t kMessageMs = 4000;  // how long a button shows why nothing starts
-constexpr uint8_t kMessageBrightness = 150;  // of 255
-constexpr uint32_t kReleaseTimeoutMs = 10000;
-constexpr uint8_t kWakeButtons[] = {1, 2};  // D1 and D2 read high while pressed
+constexpr uint8_t kAddrMax17048 = 0x36;  ///< The battery monitor's I2C address.
+constexpr uint32_t kRailMs = 10;      ///< For the I2C rail to come up, in ms.
+constexpr uint32_t kMessageMs = 4000;  ///< How long a button shows why nothing starts, in ms.
+constexpr uint8_t kMessageBrightness = 150;  ///< Backlight for that, of 255.
+constexpr uint32_t kReleaseTimeoutMs = 10000;  ///< The longest waitForRelease() waits, in ms.
+constexpr uint8_t kWakeButtons[] = {1, 2};  ///< D1 and D2, which read high while pressed.
 
-// Off while asleep: the backlight, the regulator for the screen and the
-// STEMMA QT port (so also the sensor), and the NeoPixel.
+/// Off while asleep: the backlight, the regulator for the screen and the
+/// STEMMA QT port (so also the sensor), and the NeoPixel.
 const gpio_num_t kPowerPins[] = {static_cast<gpio_num_t>(TFT_BACKLITE),
                                  static_cast<gpio_num_t>(TFT_I2C_POWER),
                                  static_cast<gpio_num_t>(NEOPIXEL_POWER)};
 
+/// Why the monitor is switched off.
 enum class Off : uint8_t { No, ByUser, ForBattery };
 
-// Why it's asleep. Kept through deep sleep, but not through a reset or a power cut.
+/// Why it's asleep. Kept through deep sleep, but not through a reset or a power cut.
 RTC_DATA_ATTR Off asleep = Off::No;
 
-bool usbStart = false;  // started again because USB power is back
+bool usbStart = false;  ///< Started again because USB power is back.
 
+/// Whether D1 or D2 is pressed.
 bool buttonPressed() {
   for (uint8_t pin : kWakeButtons) {
     if (digitalRead(pin) == HIGH) return true;
@@ -44,8 +50,9 @@ bool buttonPressed() {
   return false;
 }
 
-// Whether D1 or D2, which woke the chip, stays pressed until `ms` after the
-// wake (millis() counts from it).
+/// @brief Whether D1 or D2, which woke the chip, stays pressed until `ms`
+/// after the wake.
+/// @param ms The time, as millis(), which counts from the wake.
 bool heldUntil(uint32_t ms) {
   for (uint8_t pin : kWakeButtons) pinMode(pin, INPUT_PULLDOWN);
   while (millis() < ms) {
@@ -55,10 +62,15 @@ bool heldUntil(uint32_t ms) {
   return true;
 }
 
+/// Waits until D1 and D2 are released, for kReleaseTimeoutMs at most.
 void waitForRelease() {
   for (uint32_t start = millis(); buttonPressed() && millis() - start < kReleaseTimeoutMs;) delay(10);
 }
 
+/// @brief Reads one of the battery monitor's 16-bit registers.
+/// @param reg The register.
+/// @param[out] value What it holds.
+/// @return Whether that worked.
 bool readRegister16(uint8_t reg, uint16_t& value) {
   Wire.beginTransmission(kAddrMax17048);
   Wire.write(reg);
@@ -69,8 +81,12 @@ bool readRegister16(uint8_t reg, uint16_t& value) {
   return true;
 }
 
-// The battery monitor runs from the battery and keeps measuring while the
-// rest sleeps (see SensorService::readBattery for the units).
+/// @brief Reads the battery while switched off.
+///
+/// The battery monitor runs from the battery and keeps measuring while the
+/// rest sleeps (see SensorService::readBattery for the units).
+/// @param[out] volts The voltage in V; left as it was if it can't be read.
+/// @param[out] ratePerHour The charge rate in % per hour; the same.
 void readBattery(float& volts, float& ratePerHour) {
   delay(kRailMs);
   Wire.begin(SDA, SCL, 100000);
@@ -83,6 +99,7 @@ void readBattery(float& volts, float& ratePerHour) {
   Wire.end();
 }
 
+/// Shows the Battery empty screen for kMessageMs.
 void showEmpty() {
   Lgfx tft;
   tft.init();
@@ -96,6 +113,9 @@ void showEmpty() {
   delay(kMessageMs);
 }
 
+/// @brief Switches off: holds the power pins low and enters deep sleep.
+/// @param why Why, which decides what wakes it: D1 or D2, and for the
+///   battery also a timer every kCheckEveryMinutes.
 [[noreturn]] void sleep(Off why) {
   asleep = why;
   for (gpio_num_t pin : kPowerPins) {

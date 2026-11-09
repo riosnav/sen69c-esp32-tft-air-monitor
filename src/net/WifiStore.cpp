@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+/// @file
+/// @brief Saved Wi-Fi networks, persisted in NVS (see WifiStore.h).
+
 #include "WifiStore.h"
 
 #include <Preferences.h>
@@ -9,8 +12,12 @@
 
 namespace {
 
-constexpr const char* kNamespace = "wifi";
+constexpr const char* kNamespace = "wifi";  ///< The NVS namespace.
 
+/// @brief The NVS key of one of a network's fields, e.g. `ssid0`.
+/// @param prefix The field's prefix, e.g. `ssid`.
+/// @param i The network's index.
+/// @return The prefix followed by the index.
 String key(const char* prefix, size_t i) { return String(prefix) + i; }
 
 }  // namespace

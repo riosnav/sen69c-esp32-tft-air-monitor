@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+/// @file
+/// @brief Debouncing and the events of a press (see ButtonLogic.h).
+
 #include "ButtonLogic.h"
 
 namespace aq {

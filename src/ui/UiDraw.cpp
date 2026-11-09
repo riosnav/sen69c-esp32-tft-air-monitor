@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Drawing of every screen. The display is 240x135 in landscape; the strip on
-// the left holds the button hints, so content starts at x = kLeft.
+
+/// @file
+/// @brief Drawing of every screen: the drawing half of Ui (see Ui.h), and
+/// drawBatteryEmpty() (see Screens.h).
+///
+/// The display is 240x135 in landscape; the strip on the left holds the button
+/// hints, so content starts at x = kLeft. Every string drawn with drawRich()
+/// uses the markup in Text.h.
 
 #include <Comfort.h>
 
@@ -21,22 +26,22 @@ using aq::Metric;
 
 namespace {
 
-constexpr int kLeft = 22;    // content left edge
-constexpr int kRight = 226;  // content right edge; the page dots sit beyond it
-constexpr int kTitleBaseline = 13;
-// Vertical centres of the D0, D1 and D2 buttons beside the screen.
+constexpr int kLeft = 22;    ///< Content's left edge, in px.
+constexpr int kRight = 226;  ///< Content's right edge, in px; the page dots sit beyond it.
+constexpr int kTitleBaseline = 13;  ///< The title bar's baseline, in px.
+/// Vertical centres of the D0, D1 and D2 buttons beside the screen, in px.
 constexpr int kButtonY[] = {11, 67, 124};
-constexpr int kMenuRows = 6;
-constexpr int kMenuRowHeight = 19;
-constexpr uint16_t kQrLight = theme::rgb(255, 255, 255);
+constexpr int kMenuRows = 6;  ///< Menu rows on screen at once.
+constexpr int kMenuRowHeight = 19;  ///< A menu row's height, in px.
+constexpr uint16_t kQrLight = theme::rgb(255, 255, 255);  ///< The white square behind a QR code.
 
-const lgfx::IFont* const kSmall = &fonts::DejaVu9;
-const lgfx::IFont* const kBody = &fonts::DejaVu12;
-const lgfx::IFont* const kMedium = &fonts::DejaVu18;
-const lgfx::IFont* const kLarge = &fonts::DejaVu24;
-const lgfx::IFont* const kHuge = &fonts::DejaVu40;
+const lgfx::IFont* const kSmall = &fonts::DejaVu9;  ///< Footers, scales, text beside a QR code.
+const lgfx::IFont* const kBody = &fonts::DejaVu12;  ///< Most text.
+const lgfx::IFont* const kMedium = &fonts::DejaVu18;  ///< Headings, and values in rows.
+const lgfx::IFont* const kLarge = &fonts::DejaVu24;  ///< Large values, when huge ones don't fit.
+const lgfx::IFont* const kHuge = &fonts::DejaVu40;  ///< The main values.
 
-// In Ui::Item order.
+/// The menu items' labels, with the markup, in Ui::Item order.
 constexpr const char* kItemLabels[] = {
     "Brightness",   "Dim after",    "Idle screen",    "Units",          "Status LED",
     "Silence",      "Wi-Fi",        "Set up Wi-Fi", "Forget Wi-Fi",
@@ -45,6 +50,9 @@ constexpr const char* kItemLabels[] = {
     "Restart",      "Power off",    "Factory reset", "Close",
 };
 
+/// @brief A metric's short name, with the markup, e.g. `CO_2`.
+/// @param m The metric.
+/// @return The name.
 const char* label(Metric m) {
   switch (m) {
     case Metric::Pm1:
@@ -72,14 +80,19 @@ const char* label(Metric m) {
   }
 }
 
-// Range of the level bars, and the smallest span a trend graph zooms into
-// (so sensor noise doesn't look like a trend).
+/// @brief Range of the level bars, and the smallest span a trend graph zooms
+/// into (so sensor noise doesn't look like a trend).
+///
+/// In the metric's units; for a temperature the span is in the units shown.
 struct Scale {
-  float barMin;
-  float barMax;
-  float minSpan;
+  float barMin;  ///< The value at a bar's left end.
+  float barMax;  ///< The value at its right end; higher values fill it.
+  float minSpan;  ///< The smallest span a trend graph shows.
 };
 
+/// @brief The bars' range and the trend graphs' smallest span for a metric.
+/// @param m The metric.
+/// @return Its scale.
 Scale scaleOf(Metric m) {
   switch (m) {
     case Metric::Pm1:
@@ -106,13 +119,22 @@ Scale scaleOf(Metric m) {
   }
 }
 
-// String(value, decimals) pads to decimals + 2 characters, which puts a space
-// before whole numbers with one digit (" 1"); this doesn't.
+/// @brief A number as text, rounded to `decimals` decimals.
+///
+/// String(value, decimals) pads to decimals + 2 characters, which puts a space
+/// before whole numbers with one digit (`" 1"`); this doesn't.
+/// @param value The number.
+/// @param decimals How many decimals.
+/// @return The text.
 String number(float value, unsigned int decimals) {
   if (decimals > 0 || !std::isfinite(value)) return String(value, decimals);
   return String(std::lround(value));
 }
 
+/// @brief A duration as text: `<1 min`, minutes, hours and minutes below 48 h,
+/// then days and hours.
+/// @param ms The duration, in ms.
+/// @return The text.
 String duration(uint32_t ms) {
   const uint32_t minutes = ms / 60000;
   if (minutes < 1) return "<1 min";
@@ -122,6 +144,9 @@ String duration(uint32_t ms) {
   return String(hours / 24) + " d " + String(hours % 24) + " h";
 }
 
+/// @brief The sensor's errors as text, e.g. `Error: fan CO_2`.
+/// @param value The SEN69C's device status register.
+/// @return The text, with the markup.
 String statusText(uint32_t value) {
   SEN69CDeviceStatus s{};
   s.value = value;
@@ -136,15 +161,28 @@ String statusText(uint32_t value) {
   return text;
 }
 
+/// @brief Whether a value that's off is too high rather than too low.
+///
+/// Without a lower warning limit it can only be too high; otherwise it's too
+/// high from halfway between the warning limits.
+/// @param t The metric's limits.
+/// @param value The value.
 bool isHigh(const aq::Thresholds& t, float value) {
   return std::isnan(t.warnLow) || value >= (t.warnLow + t.warnHigh) / 2;
 }
 
+/// How comfortable the room is: what's off, if anything, and how much.
 struct Verdict {
-  const char* text;
-  Level level;
+  const char* text;  ///< E.g. `Too humid`; `""` while unknown.
+  Level level;  ///< How bad it is.
 };
 
+/// @brief Whether the room is comfortable, or what's off: the humidity or the
+/// temperature, whichever is worse (the humidity on a tie).
+/// @param aq Every metric's level.
+/// @param m The latest measurement.
+/// @return The verdict: `Comfortable` at aq::Level::Good; unknown while either
+///   level is.
 Verdict comfortVerdict(const aq::AirQuality& aq, const aq::Measurement& m) {
   const Level t = aq.level(Metric::Temperature);
   const Level rh = aq.level(Metric::Humidity);
@@ -716,7 +754,6 @@ void Ui::drawNetwork() {
   }
 }
 
-// Four bars, filled by signal strength, ending at `right`.
 void Ui::drawSignal(int right, int baseline, int8_t rssi) {
   const int strength = rssi >= -55 ? 4 : rssi >= -65 ? 3 : rssi >= -75 ? 2 : 1;
   for (int i = 0; i < 4; ++i) {
@@ -726,7 +763,6 @@ void Ui::drawSignal(int right, int baseline, int8_t rssi) {
   }
 }
 
-// A dot and two arcs opening upwards, 11 px wide.
 void Ui::drawWifiIcon(int cx, int bottom, uint16_t color) {
   const int cy = bottom - 1;
   frame_.fillCircle(cx, cy, 1, color);
@@ -814,7 +850,6 @@ void Ui::drawSetup() {
   }
 }
 
-// QR code of the web page, to open it on a phone.
 void Ui::drawLink() {
   const String ip = wifi_->ip().toString();
   const int width = drawQr(("http://" + ip + "/").c_str()) - 4 - kLeft;
@@ -829,8 +864,6 @@ void Ui::drawLink() {
   drawPlain(frame_, "closes this.", kLeft, 124, theme::kMuted, width);
 }
 
-// An update arriving from the web page, stored beside the running firmware
-// until it is confirmed; then installing.
 void Ui::drawUpdate() {
   const bool done = ota_->state() == OtaState::Accepted;
   const int percent = done ? 100 : ota_->percent();
@@ -849,7 +882,6 @@ void Ui::drawUpdate() {
   drawRich(frame_, done ? "Keep the power on" : "Asks before installing", kLeft, 120, theme::kMuted);
 }
 
-// An uploaded update, waiting for a yes on the monitor itself.
 void Ui::drawUpdatePrompt(uint32_t nowMs) {
   constexpr int kWidth = kRight - kLeft;
   frame_.setFont(kMedium);
@@ -871,8 +903,6 @@ void Ui::drawUpdatePrompt(uint32_t nowMs) {
   drawRich(frame_, left.c_str(), kLeft, 129, theme::kMuted);
 }
 
-// A QR code at the right edge, in a white square with a quiet zone of two
-// modules; returns the square's left edge. 4 px modules scan well with phones.
 int Ui::drawQr(const char* text) {
   constexpr int kModule = 4;
   // What versions 1 to 4 hold in byte mode with low error correction.
@@ -1048,7 +1078,6 @@ void Ui::drawPoweringOff() {
   drawRich(frame_, countdown.c_str(), kLeft, 110, theme::kAccent);
 }
 
-// Like an air alert, for a battery running low.
 void Ui::drawBatteryAlert() {
   constexpr int x = kLeft;
   constexpr int y = 20;
@@ -1070,9 +1099,6 @@ void Ui::drawBatteryAlert() {
   drawRich(frame_, "Press any button", x + 8, y + 104, theme::kMuted);
 }
 
-// Over the title bar: the one band every screen has in the same place, so the
-// message never cuts through a row. It ends above the line under the title,
-// and above the first row of a QR code.
 void Ui::drawToast() {
   frame_.fillRect(kLeft - 2, 0, kRight - kLeft + 4, 17, theme::kFaint);
   frame_.setFont(kBody);

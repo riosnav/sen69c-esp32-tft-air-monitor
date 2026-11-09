@@ -1,15 +1,23 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// LovyanGFX driver configuration for the 1.14" 240x135 ST7789 IPS panel on the
-// Adafruit ESP32-S3 Reverse TFT Feather. Pin numbers come from the board
-// variant (pins_arduino.h).
+
+/// @file
+/// @brief LovyanGFX driver configuration for the 1.14 inch 240x135 ST7789 IPS
+/// panel on the Adafruit ESP32-S3 Reverse TFT Feather.
+///
+/// Pin numbers come from the board variant (`pins_arduino.h`).
 #pragma once
 
 #include <Arduino.h>
 #include <LovyanGFX.hpp>
 
+/// @brief The display: LovyanGFX set up for this board's panel, its SPI bus and
+/// its PWM backlight.
+///
+/// The panel is 135x240 portrait; rotation 1 makes it 240x135 landscape with
+/// the buttons on the left, as Ui::begin() sets it.
 class Lgfx : public lgfx::LGFX_Device {
  public:
+  /// Configures the bus, the panel and the backlight; init() starts them.
   Lgfx() {
     {
       auto cfg = bus_.config();
@@ -59,7 +67,7 @@ class Lgfx : public lgfx::LGFX_Device {
   }
 
  private:
-  lgfx::Bus_SPI bus_;
-  lgfx::Panel_ST7789 panel_;
-  lgfx::Light_PWM light_;
+  lgfx::Bus_SPI bus_;  ///< The SPI bus to the panel, write-only.
+  lgfx::Panel_ST7789 panel_;  ///< The panel's ST7789 controller.
+  lgfx::Light_PWM light_;  ///< The backlight, dimmed by PWM.
 };

@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+/// @file
+/// @brief Collecting the 10 s and 1 min means of every metric (see History.h).
+
 #include "History.h"
 
 namespace aq {

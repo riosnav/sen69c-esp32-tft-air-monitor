@@ -1,14 +1,27 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+/// @file
+/// @brief Drawing and measuring text with the markup for the glyphs the fonts
+/// lack, and drawing it without (see Text.h).
+
 #include "Text.h"
 
 #include <algorithm>
 
 namespace {
 
-const lgfx::IFont* const kSmallFont = &fonts::DejaVu9;
+const lgfx::IFont* const kSmallFont = &fonts::DejaVu9;  ///< For subscripts and superscripts.
 
-// Shared by drawing and measuring, so both always agree.
+/// @brief Draws or measures `text` with its markup.
+///
+/// Shared by drawing and measuring, so both always agree.
+/// @param[in,out] s The sprite, with the font to use.
+/// @param text The text, with the markup (see Text.h).
+/// @param x Its left edge, in px.
+/// @param baseline Its baseline, in px.
+/// @param color Its colour, as RGB565.
+/// @param draw Whether to draw it; if not, it's only measured.
+/// @return Its width, in px.
 int render(LGFX_Sprite& s, const char* text, int x, int baseline, uint16_t color, bool draw) {
   const lgfx::IFont* font = s.getFont();
   const int height = s.fontHeight();

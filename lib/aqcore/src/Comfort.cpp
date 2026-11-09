@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+/// @file
+/// @brief Dew point and absolute humidity (see Comfort.h).
+
 #include "Comfort.h"
 
 #include <cmath>

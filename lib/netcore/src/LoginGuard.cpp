@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+/// @file
+/// @brief The waits after wrong web passwords (see LoginGuard.h).
+
 #include "LoginGuard.h"
 
 namespace net {

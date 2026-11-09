@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+/// @file
+/// @brief The device's names from its MAC address, and random passwords (see
+/// Device.h).
+
 #include "Device.h"
 
 #include <bootloader_random.h>
@@ -13,11 +17,13 @@ namespace device {
 
 namespace {
 
+/// The names, worked out once from the Wi-Fi MAC address.
 struct Ids {
-  char shortId[5];
-  char hostname[24];
-  char macId[13];
+  char shortId[5];    ///< See device::shortId().
+  char hostname[24];  ///< See device::hostname().
+  char macId[13];     ///< See device::macId().
 
+  /// Reads the MAC address and writes the names.
   Ids() {
     uint8_t mac[6] = {};
     esp_read_mac(mac, ESP_MAC_WIFI_STA);
@@ -28,6 +34,7 @@ struct Ids {
   }
 };
 
+/// The names, worked out on first use.
 const Ids& ids() {
   static const Ids instance;
   return instance;
