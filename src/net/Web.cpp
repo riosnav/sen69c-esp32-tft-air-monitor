@@ -822,6 +822,17 @@ esp_err_t getSettings(httpd_req_t* req) {
   return sendJson(req, root.get());
 }
 
+/// @brief Whether text has ASCII control characters (below 32, or 127),
+/// which have no place in a name.
+/// @param text The text, UTF-8.
+bool hasControlCharacters(const char* text) {
+  for (const char* c = text; *c != '\0'; ++c) {
+    const auto byte = static_cast<uint8_t>(*c);
+    if (byte < 0x20 || byte == 0x7F) return true;
+  }
+  return false;
+}
+
 /// @brief Whether text is all printable ASCII.
 /// @param text The text.
 bool printable(const char* text) {
@@ -839,7 +850,10 @@ const char* parseSettings(const cJSON* json, Settings& s) {
   const cJSON* f;
   if (const char* name = stringField(json, "name")) {
     const size_t length = strlen(name);
-    if (length == 0 || length >= sizeof s.name) return "Name: 1 to 31 characters";
+    if (length == 0 || length >= sizeof s.name) {
+      return "Name: 1 to 31 characters (letters with accents count as 2)";
+    }
+    if (hasControlCharacters(name)) return "Name: no control characters";
     strlcpy(s.name, name, sizeof s.name);
   }
   if ((f = field(json, "brightness"))) {
@@ -1067,7 +1081,7 @@ const char* parseNetwork(const cJSON* json, WifiCredentials& network) {
   const char* password = stringField(json, "password");
   if (password == nullptr) password = "";
   if (ssid == nullptr || ssid[0] == '\0' || strlen(ssid) >= sizeof network.ssid) {
-    return "Network name: 1 to 32 characters";
+    return "Network name: 1 to 32 characters (letters with accents count as 2)";
   }
   // A WPA passphrase has 8 to 63 characters; 64 are taken as the key
   // itself, in hex, and anything else that long never joins.
