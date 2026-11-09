@@ -1069,6 +1069,7 @@ async function downloadHistory() {
  */
 async function loadSettings() {
   const s = await request('/api/settings');
+  loadedSettings = s;
   const f = $('#settings').elements;
   f.deviceName.value = s.name;
   f.brightness.value = s.brightness;
@@ -1087,6 +1088,13 @@ async function loadSettings() {
     : 'No web password is set: anyone on your network can change settings.';
 }
 
+/**
+ * The settings as the form last loaded them, so Save sends only what was
+ * changed in the form: the rest may have changed since, on the monitor or from
+ * Home Assistant.
+ */
+let loadedSettings = {};
+
 $('#settings').elements.brightness.addEventListener('input', (e) => {
   $('#brightness-out').textContent = e.target.value + ' %';
 });
@@ -1094,7 +1102,7 @@ $('#settings').elements.brightness.addEventListener('input', (e) => {
 $('#settings').addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = e.target.elements;
-  const body = {
+  const form = {
     name: f.deviceName.value.trim(),
     brightness: Number(f.brightness.value),
     dimAfter: Number(f.dimAfter.value),
@@ -1107,8 +1115,13 @@ $('#settings').addEventListener('submit', async (e) => {
     co2SelfCalibration: f.co2SelfCalibration.checked,
     wifiEnabled: f.wifiEnabled.checked,
   };
+  const body = Object.fromEntries(Object.entries(form).filter(([key, value]) => value !== loadedSettings[key]));
   if (f.noPassword.checked) body.webPassword = '';
   else if (f.newPassword.value) body.webPassword = f.newPassword.value;
+  if (Object.keys(body).length === 0) {
+    message('settings-msg', 'Nothing has changed.');
+    return;
+  }
   try {
     await post('/api/settings', body);
     if (body.webPassword !== undefined) rememberPassword(body.webPassword || null);
