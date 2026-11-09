@@ -21,7 +21,8 @@ humidity, all in green](docs/screen.png)
 
 - Every value on the built-in 240×135 colour screen, with green / amber / red levels.
 - A pop-up alert (which also wakes the screen, and closes by itself after a minute) when a value leaves the
-  healthy range; the board's small colour LED shows the overall air quality.
+  healthy range; the board's small colour LED shows the overall air quality. *Silence* keeps the screen and LED
+  dark at night, by hand or from Home Assistant.
 - Trend graphs of the last hour, 24 hours and 7 days for every value.
 - A settings menu on the device, worked with its three buttons. Settings survive restarts and power cuts.
 - Wi-Fi setup from a phone, no reprogramming: scan the QR code on the screen and pick your network. Up to five
@@ -29,7 +30,8 @@ humidity, all in green](docs/screen.png)
 - A web page on your network with live values (optionally with the sensor's tolerance), trend charts, a CSV
   download of the last 7 days, settings, maintenance and firmware updates over Wi-Fi (confirmed with a button on
   the monitor, and rolled back automatically if an update fails).
-- Home Assistant integration: the monitor appears as a device with a sensor for every value.
+- Home Assistant integration: the monitor appears as a device with a sensor for every value, and Home Assistant
+  can switch *Silence* on and off.
 - Works fully offline; Wi-Fi is optional and everything stays on your network (no cloud).
 
 ## What you need
@@ -168,8 +170,10 @@ seasonal temperature and humidity ranges.
 PM1 and PM4 have no limits and are shown for information. A level only drops back once the value is a little
 inside the limit again, so readings near a limit don't flicker. The overall level is the worst of them.
 
-When a value turns Fair or Poor, a pop-up names it. It closes with any button, or by itself after a minute, and the
-same value only alerts again if it gets worse. While a Poor alert is showing, the LED blinks red.
+When a value turns Fair or Poor, a pop-up names it and the screen comes on. It closes with any button, or by itself
+after a minute, and the same value only alerts again if it gets worse. While a Poor alert is showing, the LED blinks
+red. *Silence* (below) keeps alerts from turning the screen on, e.g. at night: they wait on the screen until a
+button wakes it.
 
 ### Accuracy
 
@@ -196,6 +200,7 @@ in memory and start over after a restart or update (the web page can download th
 | Setting | What it does |
 |---|---|
 | Brightness, Dim after, Idle screen, Units, Status LED | Screen brightness; when the screen dims, and whether it dims or switches off then (the sensor keeps measuring, and a button press or an alert wakes it); °C or °F; and how bright the colour LED is (or off). |
+| Silence | Keeps the monitor dark, e.g. at night. *Warnings*: only Poor alerts turn the screen on; *All*: no alert does. Either way the screen switches off when idle, instead of dimming (after the *Dim after* time, or 2 minutes if that's *Never*), and the LED stays off, except while a Poor alert is showing with *Warnings*. Home Assistant can switch it, e.g. at bedtime and in the morning. |
 | Wi-Fi | Turns Wi-Fi on or off. |
 | Set up Wi-Fi | Adds a network from a phone (see below). |
 | Forget Wi-Fi | Deletes every saved network. |
@@ -300,6 +305,11 @@ password"). Readings are sent every 30 s; if the monitor loses power, Home Assis
 unavailable after about 90 s. Without the broker (e.g. on another network) the monitor works as usual and keeps
 retrying in the background.
 
+The device also has a *Silence* setting (Off, Warnings or All; see [Settings](#settings)) under *Configuration*.
+To keep the monitor dark at night, add two automations (*Settings → Automations & scenes*): at bedtime, a *Time*
+trigger and the action *Select: Select option* on the monitor's *Silence* with *All* (or *Warnings*); in the
+morning, the same with *Off*.
+
 ## Updating the firmware
 
 Get the new version of the code (download it again and open the new folder in VS Code, or `git pull`) and build
@@ -387,8 +397,8 @@ temp rh`. `/api/history.csv` has every value's 1-minute means for the last 7 day
 its first column says how many seconds ago each minute started; the web page's download turns that into times.
 
 Over MQTT, with `<host>` the monitor's host name (e.g. `airmonitor-a1b2`): `<host>/state` carries all the values
-as JSON, `<host>/status` is `online` or `offline`, and the discovery message is
-`homeassistant/device/<host>/config`. See [src/net/MqttService.h](src/net/MqttService.h).
+as JSON, `<host>/status` is `online` or `offline`, `<host>/silence/set` takes `Off`, `Warnings` or `All`, and the
+discovery message is `homeassistant/device/<host>/config`. See [src/net/MqttService.h](src/net/MqttService.h).
 
 ### Optional local settings
 
