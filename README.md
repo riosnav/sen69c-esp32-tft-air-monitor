@@ -47,8 +47,8 @@ humidity, all in green](docs/screen.png)
 | 1 | USB charger (5 V) | To power the monitor afterwards; a phone charger is fine. |
 | opt. | LiPo battery (3.7 V, 250 mAh or more) with a JST-PH 2-pin plug | Only as a backup for power cuts or moving it around; the monitor is meant to run from USB. Adafruit's own LiPo batteries fit, and have the protection circuit a battery needs against running completely flat; some from other sellers lack it, or are wired the other way round, which can destroy the board. |
 
-No soldering or tools are needed: the Feather comes with loose header pins, which you don't use. This repository
-doesn't include an enclosure.
+No soldering or tools are needed: the Feather comes with loose header pins, which you don't use. A 3D-printable
+[enclosure](#enclosure) is optional.
 
 ## Assembly
 
@@ -65,6 +65,32 @@ pin holes empty.
 Where to put it: mount the sensor with its openings facing sideways (not up or down), away from or below the
 Feather (whose heat skews the temperature reading), and out of direct sunlight. Without an enclosure, double-sided
 foam tape on a piece of card or plastic holds the three boards in place.
+
+## Enclosure
+
+![The monitor in its white 3D-printed enclosure: the screen and buttons in a window on the sloping front, held by
+four black nylon screws, and the sensor's openings below them](docs/enclosure.jpg)
+
+The `enclosure` folder has a 3D-printable enclosure in two parts, as STEP files: `main_enclosure.step`, the body,
+and `lid.step`. It is a rough first version: some edges may need filing before the parts fit together.
+
+Besides the parts above, you need four nylon screws with nuts for the Feather, two **M2.5** and two **M2**, and
+preferably some insulating foam and a soft pad. The screws pass through 3.5 mm before the nut, so they need that
+length plus the nut's height and a little more, e.g. 8 mm.
+
+- **The Feather** sits behind the window in the sloping front, with its screen and buttons showing through. The
+  screws go in from the front, through its mounting holes, with the nuts behind the board: the two holes at the USB
+  end are larger and take the M2.5 screws, the two at the other end take the M2 ones. The USB-C socket stays
+  reachable through an opening in the side.
+- **The sensor** presses into place and clips onto the enclosure, with its openings at the front, below the screen.
+  Insulating foam or similar material behind and around it shields it from other heat, such as the Feather's.
+- **The breakout and the cables** lie loose inside.
+- **The lid** is held by friction. If the print is too loose for that, a bit of tape on the lid's inner tabs makes
+  it fit tighter.
+- **A soft pad** under the enclosure dampens vibrations.
+
+Printed in white or translucent filament, the enclosure lets the board's colour LED, which shows the overall air
+quality, glow through somewhat.
 
 ## Installing the firmware
 
