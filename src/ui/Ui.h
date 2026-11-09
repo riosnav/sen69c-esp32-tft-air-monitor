@@ -339,8 +339,9 @@ class Ui {
   /// @brief Draws a QR code at the right edge, in a white square with a quiet
   /// zone of two modules.
   ///
-  /// 4 px modules scan well with phones. The code is version 1 to 4, the
-  /// smallest that holds `text`.
+  /// The code is version 1 to 4, the smallest that holds `text`. Its modules
+  /// are 4 px, which phones scan well, or 3 px for version 4, which wouldn't
+  /// fit the screen's height otherwise.
   /// @param text What it encodes, up to 78 bytes.
   /// @return The square's left edge, in px.
   int drawQr(const char* text);

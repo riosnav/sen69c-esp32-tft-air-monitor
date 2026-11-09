@@ -910,12 +910,14 @@ int Ui::drawQr(const char* text) {
   const size_t length = strlen(text);
   int version = 1;
   while (version < 4 && length > kCapacity[version - 1]) ++version;
-  const int code = (17 + 4 * version) * kModule;
-  const int size = code + 4 * kModule;
+  // Smaller modules where the code and its quiet zone wouldn't fit the height.
+  const int module = std::min<int>(kModule, frame_.height() / (17 + 4 * version + 4));
+  const int code = (17 + 4 * version) * module;
+  const int size = code + 4 * module;
   const int left = frame_.width() - 1 - size;
   const int top = (frame_.height() - size) / 2;
   frame_.fillRect(left, top, size, size, kQrLight);
-  frame_.qrcode(text, left + 2 * kModule, top + 2 * kModule, code, version);
+  frame_.qrcode(text, left + 2 * module, top + 2 * module, code, version);
   return left;
 }
 
