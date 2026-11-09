@@ -46,7 +46,13 @@ constexpr size_t kMaxBodyBytes = 2048;   ///< The largest JSON request body, in 
 /// The API's requests need 2.
 constexpr int kMaxJsonDepth = 8;
 constexpr size_t kOtaChunkBytes = 4096;  ///< How much of an image is received at a time, in bytes.
-constexpr int kRecvRetries = 5;  ///< How often receiving may time out before a request fails.
+/// @brief How long the server waits for a client's next bytes, in s.
+///
+/// It serves one request at a time, so a client that stalls holds everyone
+/// else up for this long.
+constexpr int kRecvTimeoutS = 5;
+/// How often receiving a firmware upload may time out before it fails.
+constexpr int kRecvRetries = 5;
 
 Context ctx;                      ///< What the handlers reach (see begin()).
 httpd_handle_t server = nullptr;  ///< The running server; nullptr before begin().
@@ -381,10 +387,9 @@ Json readJson(httpd_req_t* req) {
   std::unique_ptr<char[]> body(new (std::nothrow) char[req->content_len + 1]);
   if (!body) return nullptr;
   size_t received = 0;
-  int retries = 0;
   while (received < req->content_len) {
+    // A body this small that stalls for kRecvTimeoutS isn't coming.
     const int n = httpd_req_recv(req, body.get() + received, req->content_len - received);
-    if (n == HTTPD_SOCK_ERR_TIMEOUT && ++retries <= kRecvRetries) continue;
     if (n <= 0) return nullptr;
     received += n;
   }
@@ -1333,7 +1338,7 @@ bool begin(const Context& context) {
   config.max_uri_handlers = 16;
   config.lru_purge_enable = true;  // phones leave idle connections open
   config.stack_size = 8192;
-  config.recv_wait_timeout = 10;
+  config.recv_wait_timeout = kRecvTimeoutS;
   config.send_wait_timeout = 10;
   if (httpd_start(&server, &config) != ESP_OK) {
     Serial.println("Web: server did not start");
