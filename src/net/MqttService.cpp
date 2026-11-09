@@ -147,12 +147,6 @@ cJSON* addLevelSensor(cJSON* components, const char* key, const char* name, cons
   return c;
 }
 
-/// @brief Whether the time `atMs` has come, also across millis() wrapping
-/// around.
-/// @param nowMs The time, as millis().
-/// @param atMs The time it's due, as millis().
-bool due(uint32_t nowMs, uint32_t atMs) { return static_cast<int32_t>(nowMs - atMs) >= 0; }
-
 }  // namespace
 
 void MqttService::begin(const Settings& settings, const WifiService& wifi,
@@ -174,8 +168,9 @@ void MqttService::loop(const SensorSnapshot& snapshot, const aq::AirQuality& air
                        uint32_t nowMs) {
   if (client_ != nullptr && (!wanted() || brokerChanged())) stop();
   if (client_ == nullptr && wanted() && wifi_->state() == WifiState::Connected &&
-      due(nowMs, nextStartMs_)) {
-    nextStartMs_ = nowMs + kStartRetryMs;
+      (!startTried_ || nowMs - lastStartMs_ >= kStartRetryMs)) {
+    startTried_ = true;
+    lastStartMs_ = nowMs;
     start();
   }
   logChanges();
@@ -286,7 +281,7 @@ void MqttService::stop() {
   justConnected_ = false;
   error_ = Error::None;
   announcedName_[0] = '\0';
-  nextStartMs_ = millis();  // with new settings, start again right away
+  startTried_ = false;  // with new settings, start again right away
   Serial.println("MQTT: stopped");
 }
 

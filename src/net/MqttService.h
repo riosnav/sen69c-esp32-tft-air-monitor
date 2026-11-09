@@ -125,7 +125,8 @@ class MqttService {
   char announcedName_[sizeof Settings::name] = "";  ///< Empty: announce again.
   bool announcedBattery_ = false;  ///< Whether the announcement had the battery.
   Silence publishedSilence_ = Silence::Off;
-  uint32_t nextStartMs_ = 0;  ///< When the client may start again, as millis().
+  bool startTried_ = false;  ///< A start was tried since begin() or stop().
+  uint32_t lastStartMs_ = 0;  ///< When, as millis().
   uint32_t lastStateMs_ = 0;  ///< When the readings were last published, as millis().
   MqttState loggedState_ = MqttState::Off;  ///< What logChanges() last saw.
 
