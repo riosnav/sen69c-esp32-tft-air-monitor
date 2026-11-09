@@ -190,6 +190,8 @@ void MqttService::loop(const SensorSnapshot& snapshot, const aq::AirQuality& air
 
 MqttState MqttService::state() const {
   if (!wanted()) return MqttState::Off;
+  // Without Wi-Fi the client may take a keepalive (up to 90 s) to notice.
+  if (wifi_->state() != WifiState::Connected) return MqttState::Waiting;
   if (connected_) return MqttState::Connected;
   if (client_ == nullptr || wifi_->state() != WifiState::Connected) return MqttState::Waiting;
   return error_ == Error::None ? MqttState::Connecting : MqttState::Failed;
@@ -274,7 +276,10 @@ void MqttService::start() {
 void MqttService::stop() {
   // A clean disconnect doesn't trigger the last will, so say it ourselves:
   // Home Assistant then shows the sensors as unavailable rather than stale.
-  if (connected_) esp_mqtt_client_publish(client_, statusTopic_, "offline", 0, 1, 1);
+  // Not when Wi-Fi is down: the client would wait for the network timeout.
+  if (connected_ && wifi_->state() == WifiState::Connected) {
+    esp_mqtt_client_publish(client_, statusTopic_, "offline", 0, 1, 1);
+  }
   esp_mqtt_client_destroy(client_);  // stops the client's task first
   client_ = nullptr;
   connected_ = false;
