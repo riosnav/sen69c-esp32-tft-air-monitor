@@ -140,7 +140,10 @@ void BatteryWatch::update(float volts, float gaugePercent, float ratePerHour, ui
   }
   warning_ = present_ ? std::max(warning, voltsWarning_) : 0;
 
-  isEmpty_ = empty_.update(discharging && volts <= kEmptyVolts, nowMs) && present_;
+  // A voltage jump up may only be a load ending, not USB power: switching off
+  // also follows the rate itself. Real USB power lifts the voltage anyway.
+  const bool drawing = discharging || stateOf(ratePerHour) == BatteryState::Discharging;
+  isEmpty_ = empty_.update(drawing && volts <= kEmptyVolts, nowMs) && present_;
 }
 
 bool BatteryWatch::Below::update(bool below, uint32_t nowMs) {

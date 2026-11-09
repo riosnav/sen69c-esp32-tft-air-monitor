@@ -514,6 +514,18 @@ static void test_battery_connected_while_running() {
   TEST_ASSERT_FLOAT_WITHIN(0.01f, 20.5f, all.emptyPercent());
 }
 
+/// A load ending lifts the voltage like USB power; it doesn't put off switching off.
+static void test_battery_empty_despite_a_jump_up() {
+  power::BatteryWatch w;
+  w.setPresent(true);
+  uint32_t t = 0;
+  for (int i = 0; i < 6; ++i) w.update(3.42f, 15, -9, t += 5000);  // under a heavy load
+  w.update(3.49f, 15, -9, t += 5000);  // the load ends: +70 mV
+  TEST_ASSERT_EQUAL(static_cast<int>(power::BatteryState::Charging), static_cast<int>(w.state()));
+  for (int i = 0; i < 13; ++i) w.update(3.49f, 15, -9, t += 5000);  // 65 s
+  TEST_ASSERT_TRUE(w.empty());
+}
+
 /// power::powerIsBack(): charging, or at least 3.8 V.
 static void test_power_is_back() {
   TEST_ASSERT_TRUE(power::powerIsBack(3.55f, 9.8f));    // charging
@@ -552,6 +564,7 @@ static int runTests() {
   RUN_TEST(test_battery_warns_by_voltage);
   RUN_TEST(test_battery_counts_down_to_switching_off);
   RUN_TEST(test_battery_empty_after_a_minute_low);
+  RUN_TEST(test_battery_empty_despite_a_jump_up);
   RUN_TEST(test_battery_presence_from_the_voltage);
   RUN_TEST(test_battery_connected_while_running);
   RUN_TEST(test_power_is_back);

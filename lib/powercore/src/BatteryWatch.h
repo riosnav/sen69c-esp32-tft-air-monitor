@@ -154,8 +154,11 @@ class BatteryWatch {
   ///
   /// Both this and empty() are only ever set with a battery present.
   uint8_t warning() const { return warning_; }
-  /// Whether the voltage has been low for long enough while discharging:
-  /// time to switch off.
+  /// @brief Whether the voltage has been at or below kEmptyVolts for
+  /// kLowForMs while discharging: time to switch off.
+  ///
+  /// Discharging as the state says or as the rate says: a jump up in voltage
+  /// that makes the state Charging may only be a load ending.
   bool empty() const { return isEmpty_; }
 
  private:
