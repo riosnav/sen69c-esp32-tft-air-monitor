@@ -92,7 +92,10 @@ int drawPlain(LGFX_Sprite& s, const char* text, int x, int baseline, uint16_t co
   String shown = text;
   if (s.textWidth(shown.c_str()) > maxWidth) {
     while (shown.length() > 0 && s.textWidth((shown + "...").c_str()) > maxWidth) {
-      shown.remove(shown.length() - 1);
+      // A whole UTF-8 character at a time: continuation bytes are 10xxxxxx.
+      size_t end = shown.length() - 1;
+      while (end > 0 && (static_cast<uint8_t>(shown[end]) & 0xC0) == 0x80) --end;
+      shown.remove(end);
     }
     shown += "...";
   }
