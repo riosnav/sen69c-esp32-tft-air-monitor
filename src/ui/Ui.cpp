@@ -51,7 +51,8 @@ uint8_t backlight(uint8_t percent) { return static_cast<uint8_t>(percent * 255 /
 
 /// @brief Whether an alert at `level` may turn the screen on.
 ///
-/// Battery alerts count as warnings.
+/// A very low battery counts as an alarm, since the monitor will soon switch
+/// itself off; a low one as a warning.
 /// @param silence The Silence setting.
 /// @param level The alert's level.
 bool wakesScreen(Silence silence, aq::Level level) {
@@ -472,7 +473,9 @@ void Ui::updateAlerts(uint32_t nowMs) {
   if (isNew) {
     alertShownMs_ = nowMs;
     // Silenced, it waits for a button press to turn the screen on.
-    const aq::Level shown = alertVisible_ ? alertLevel_ : aq::Level::Warning;
+    const aq::Level shown = alertVisible_         ? alertLevel_
+                            : batteryAlert_ == 2 ? aq::Level::Alarm
+                                                 : aq::Level::Warning;
     if (wakesScreen(settings_->silence, shown)) lastInputMs_ = nowMs;  // wake the screen
     dirty_ = true;
   }

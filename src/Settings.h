@@ -10,10 +10,10 @@
 enum class LedMode : uint8_t { Off, Dim, Bright };
 /// @brief Quiet, e.g. for the night: which alerts no longer turn the screen on.
 ///
-/// Off: every alert does. Warnings: only alarms do (battery alerts count as
-/// warnings). All: none does. While it's not Off, the screen also switches off
-/// when idle instead of dimming, and the LED stays off but for an alarm that
-/// may still turn the screen on.
+/// Off: every alert does. Warnings: only alarms do, and a very low battery,
+/// since the monitor will soon switch itself off. All: none does. While it's
+/// not Off, the screen also switches off when idle instead of dimming, and the
+/// LED stays off but for an air alarm that may still turn the screen on.
 enum class Silence : uint8_t { Off, Warnings, All };
 
 /// Choices for Settings::dimAfterS, in s.
