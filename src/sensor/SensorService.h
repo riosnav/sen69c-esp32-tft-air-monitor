@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 /// @file
-/// @brief Owns the I2C bus: runs the SEN69C (and reads the battery monitor) in
+/// @brief Owns the I2C bus: runs the SEN69C (and reads the battery gauge) in
 /// its own FreeRTOS task, so slow sensor operations never block the UI.
 #pragma once
 
@@ -51,8 +51,8 @@ struct SensorSnapshot {
   char serial[32] = "";  ///< Its serial number.
   uint8_t firmwareMajor = 0;  ///< Its firmware version, major part.
   uint8_t firmwareMinor = 0;  ///< Its firmware version, minor part.
-  float batteryVolts = NAN;  ///< Battery voltage, in V; NaN when no battery monitor answers.
-  float batteryPercent = NAN;  ///< The battery monitor's charge, in %; NaN the same.
+  float batteryVolts = NAN;  ///< Battery voltage, in V; NaN when no battery gauge answers.
+  float batteryPercent = NAN;  ///< The battery gauge's charge, in %; NaN the same.
   float batteryRate = NAN;  ///< Charge rate, in % per hour, negative while discharging.
   uint32_t batterySequence = 0;  ///< Increments with every battery reading.
   /// @brief Altitude the sensor reported back after it was set, in m; -1 when
@@ -66,7 +66,7 @@ struct SensorSnapshot {
   uint32_t resultSequence = 0;  ///< Increments with every new `result`.
 };
 
-/// @brief Runs the SEN69C, and reads the battery monitor, in its own FreeRTOS
+/// @brief Runs the SEN69C, and reads the battery gauge, in its own FreeRTOS
 /// task: the only one that uses the I2C bus.
 ///
 /// Others read the latest state with snapshot() and send commands, which are
@@ -120,13 +120,13 @@ class SensorService {
   ///
   /// Most error flags stay set until cleared, even once the error is gone.
   void clearErrors();
-  /// @brief Makes the battery monitor estimate the charge afresh from the
+  /// @brief Makes the battery gauge estimate the charge afresh from the
   /// voltage, as when it's first powered.
   ///
   /// Not queued: done within a fraction of a second, whatever the sensor is
   /// doing.
   void restartBatteryGauge();
-  /// @brief Before powering off: lets the battery monitor hibernate again and
+  /// @brief Before powering off: lets the battery gauge hibernate again and
   /// stops using the bus.
   ///
   /// Not queued: the sensor task gets there within a fraction of a second,
@@ -156,14 +156,14 @@ class SensorService {
   /// @param self The SensorService to run.
   static void taskEntry(void* self);
   /// @brief The sensor task: finds the sensor and starts it measuring, then
-  /// runs the commands and reads the sensor and the battery monitor; never
+  /// runs the commands and reads the sensor and the battery gauge; never
   /// returns.
   ///
-  /// If the sensor stops answering, it looks for it again. The battery monitor
+  /// If the sensor stops answering, it looks for it again. The battery gauge
   /// is read all the while, whatever the sensor is doing: the warnings and
   /// switching off before the battery is empty depend on it.
   void run();
-  /// @brief Waits, while still reading the battery monitor and serving
+  /// @brief Waits, while still reading the battery gauge and serving
   /// restartBatteryGauge() and powerDown().
   ///
   /// For every wait longer than a moment, e.g. during a maintenance operation.
@@ -174,7 +174,7 @@ class SensorService {
   /// @param ms How long, in ms.
   void idle(uint32_t ms);
   /// @brief Serves restartBatteryGauge() and powerDown(), and reads the
-  /// battery monitor every kBatteryIntervalMs.
+  /// battery gauge every kBatteryIntervalMs.
   void serveGauge();
   /// Takes the settings from applyConfig() into config_.
   void takePendingConfig();
@@ -212,7 +212,7 @@ class SensorService {
   void pollMeasurement();
   /// Reads the sensor's device status register into the snapshot.
   void readDeviceStatus();
-  /// @brief Reads the battery monitor's voltage, charge and charge rate into
+  /// @brief Reads the battery gauge's voltage, charge and charge rate into
   /// the snapshot; NaN if it doesn't answer.
   void readBattery();
   /// @brief Sets what the sensor is doing, here and in the snapshot.
@@ -240,8 +240,8 @@ class SensorService {
   SensorState state_ = SensorState::Starting;
   uint64_t startedMs_ = 0;  ///< uptimeMs() when the measurement last started.
   uint32_t consecutiveErrors_ = 0;  ///< Failed reads in a row.
-  bool gaugeAwake_ = false;  ///< The battery monitor's hibernation is off.
-  uint32_t lastBatteryMs_ = 0;  ///< millis() when the battery monitor was last read.
+  bool gaugeAwake_ = false;  ///< The battery gauge's hibernation is off.
+  uint32_t lastBatteryMs_ = 0;  ///< millis() when the battery gauge was last read.
   uint32_t lastDataMs_ = 0;  ///< millis() of the last measurement, or of the start.
   std::atomic<bool> gaugeRestartRequested_{false};  ///< restartBatteryGauge() was called.
   std::atomic<bool> powerDownRequested_{false};  ///< powerDown() was called.

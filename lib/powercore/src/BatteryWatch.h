@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 /// @file
-/// @brief What the battery monitor's readings mean: whether the battery is
+/// @brief What the battery gauge's readings mean: whether the battery is
 /// charging, when to warn that it's running low, when to switch off before
 /// it's empty, and whether USB power is back after that.
 ///
 /// There's no way to see USB power directly on this board; the battery
-/// monitor's charge rate tells instead. While the monitor runs on battery it
+/// gauge's charge rate tells instead. While the monitor runs on battery it
 /// draws far more than BatteryWatch::kRateThreshold, and while USB power
 /// charges an empty battery the rate is clearly positive. But the rate is
 /// worked out from the charge over time, so it takes a minute or more to
@@ -36,11 +36,13 @@ enum class BatteryState : uint8_t {
 /// @return Unknown for NaN; otherwise Charging, Discharging or Idle.
 BatteryState stateOf(float ratePerHour);
 
-/// @brief Follows the battery monitor's readings: the battery's state, low
+/// @brief Follows the battery gauge's readings: the battery's state, low
 /// battery warnings, when to switch off, and whether a battery is connected
 /// at all.
 ///
-/// Feed it each new reading with update(); it keeps no other time.
+/// Feed it each new reading with update(), about every 5 s: its only notion of
+/// time is the time given with each reading, and the voltage jumps and the
+/// presence test are tuned to that interval.
 class BatteryWatch {
  public:
   /// A charge rate this far from zero, in % per hour, is charging or
@@ -66,7 +68,7 @@ class BatteryWatch {
   static constexpr float kWarningHysteresis = 2;
   /// @brief Voltage for the first warning, in V, held for kLowForMs.
   ///
-  /// The battery monitor's percentage is for a battery at rest. Running the
+  /// The battery gauge's percentage is for a battery at rest. Running the
   /// monitor, a small or worn battery reaches kEmptyVolts while it still
   /// reads 20 % or more, so the warnings also come at these voltages: for a
   /// 400 mAh battery, about 20 and 10 minutes before switching off.
@@ -84,9 +86,9 @@ class BatteryWatch {
   static constexpr uint32_t kLowForMs = 60000;
   /// After switching off: a battery this full, in V, can only be charging.
   static constexpr float kBackVolts = 3.8f;
-  /// @brief The highest battery monitor reading, in %, learned as "empty".
+  /// @brief The highest battery gauge reading, in %, learned as "empty".
   ///
-  /// What the battery monitor reads when the monitor switches itself off is
+  /// What the battery gauge reads when the monitor switches itself off is
   /// where "empty" is for this battery: about 20 % for a 400 mAh one. More
   /// than this means the reading was off, e.g. soon after a battery was
   /// connected to a running monitor, and it isn't learned.
@@ -94,7 +96,7 @@ class BatteryWatch {
   /// @brief How many readings tell whether a battery is connected: the last
   /// 2 minutes.
   ///
-  /// Without a battery, the battery monitor reads the charger instead: 4.0 to
+  /// Without a battery, the battery gauge reads the charger instead: 4.0 to
   /// 4.2 V, jumping about 30 mV from one reading to the next. A battery's
   /// voltage moves a few mV, except under Wi-Fi traffic, and only a battery
   /// reads lower.
@@ -104,9 +106,10 @@ class BatteryWatch {
   static constexpr float kChargerVolts = 4.0f;    ///< The lowest the charger alone reads, in V.
   static constexpr float kBatteryVolts = 3.95f;   ///< Lower than this, in V, is a battery.
 
-  /// @brief Takes a new reading, every few seconds.
+  /// @brief Takes a new reading, about every 5 s (kPresenceReadings of them
+  /// make 2 minutes, and kJumpVolts assumes so).
   /// @param volts The battery's voltage in V; NaN if there's no reading.
-  /// @param gaugePercent The battery monitor's charge in %; NaN if none.
+  /// @param gaugePercent The battery gauge's charge in %; NaN if none.
   /// @param ratePerHour The charge rate in % per hour, negative while
   ///   discharging; NaN if none.
   /// @param nowMs The time, as millis().
@@ -127,7 +130,7 @@ class BatteryWatch {
   /// @brief Whether the readings have just shown a battery connected after
   /// none. True once.
   ///
-  /// The battery monitor's charge then still comes from reading the charger,
+  /// The battery gauge's charge then still comes from reading the charger,
   /// and may be a different battery's. If there was none for at least
   /// kPresenceReadings more readings, update() has also forgotten where
   /// "empty" was: it may be another battery.
@@ -137,14 +140,14 @@ class BatteryWatch {
   /// @brief The charge left before the monitor switches itself off, in %;
   /// NaN if unknown.
   ///
-  /// Until it has learned where that is, the battery monitor's own
+  /// Until it has learned where that is, the battery gauge's own
   /// percentage.
   float percent() const;
-  /// @brief What the battery monitor read the last time the monitor switched
+  /// @brief What the battery gauge read the last time the monitor switched
   /// itself off, in % (0 if never), as learnEmpty() found it.
   float emptyPercent() const { return emptyPercent_; }
   /// @brief Sets where "empty" is, e.g. as saved before a restart.
-  /// @param gaugePercent The battery monitor's reading at "empty", in %.
+  /// @param gaugePercent The battery gauge's reading at "empty", in %.
   ///   Anything outside 0 to kMaxEmptyPercent, NaN included, counts as 0.
   void setEmptyPercent(float gaugePercent);
   /// @brief On switching itself off: learns the latest reading as where
@@ -196,7 +199,7 @@ class BatteryWatch {
   size_t next_ = 0;
   size_t count_ = 0;
   BatteryState state_ = BatteryState::Unknown;
-  float gaugePercent_ = NAN;  ///< The battery monitor's latest reading.
+  float gaugePercent_ = NAN;  ///< The battery gauge's latest reading.
   float emptyPercent_ = 0;
   float recent_[3] = {NAN, NAN, NAN};  ///< The last readings' voltages.
   Jump jump_ = Jump::None;  ///< The last jump, until the rate follows it.

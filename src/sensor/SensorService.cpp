@@ -2,7 +2,7 @@
 
 /// @file
 /// @brief The sensor task: running the SEN69C and its maintenance operations,
-/// and reading the battery monitor (see SensorService.h).
+/// and reading the battery gauge (see SensorService.h).
 
 #include "SensorService.h"
 
@@ -47,7 +47,7 @@ bool remembered(uint32_t settings) {
   return sensorSettings == settings && sensorSettingsCheck == (settings ^ kSettingsKey);
 }
 
-constexpr uint8_t kAddrMax17048 = 0x36;  ///< The battery monitor's I2C address.
+constexpr uint8_t kAddrMax17048 = 0x36;  ///< The battery gauge's I2C address.
 /// The MAX17048's power-on HIBRT: it hibernates (about 3 uA instead of 23 uA)
 /// while the battery is hardly used.
 constexpr uint16_t kGaugeHibernateDefault = 0x8030;
@@ -82,7 +82,7 @@ constexpr uint32_t kPowerUpMs = 150;  ///< For the just-powered STEMMA QT port t
 /// How often to look for a new measurement, in ms; commands are handled at once.
 constexpr uint32_t kPollMs = 200;
 constexpr uint32_t kStatusIntervalMs = 10000;  ///< How often to read the device status, in ms.
-/// @brief How often to read the battery monitor, in ms.
+/// @brief How often to read the battery gauge, in ms.
 ///
 /// Often enough that the voltage jumps from one reading to the next when USB
 /// power is plugged in or unplugged (see power::BatteryWatch).

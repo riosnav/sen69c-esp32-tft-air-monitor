@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 /// @file
-/// @brief What the battery monitor's readings mean: the battery's state, the
+/// @brief What the battery gauge's readings mean: the battery's state, the
 /// warnings, when to switch off, and whether a battery is connected (see
 /// BatteryWatch.h).
 

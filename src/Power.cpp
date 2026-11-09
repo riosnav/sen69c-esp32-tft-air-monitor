@@ -21,7 +21,7 @@ namespace power {
 
 namespace {
 
-constexpr uint8_t kAddrMax17048 = 0x36;  ///< The battery monitor's I2C address.
+constexpr uint8_t kAddrMax17048 = 0x36;  ///< The battery gauge's I2C address.
 constexpr uint32_t kRailMs = 10;      ///< For the I2C rail to come up, in ms.
 constexpr uint32_t kMessageMs = 4000;  ///< How long a button shows why nothing starts, in ms.
 constexpr uint8_t kMessageBrightness = 150;  ///< Backlight for that, of 255.
@@ -67,7 +67,7 @@ void waitForRelease() {
   for (uint32_t start = millis(); buttonPressed() && millis() - start < kReleaseTimeoutMs;) delay(10);
 }
 
-/// @brief Reads one of the battery monitor's 16-bit registers.
+/// @brief Reads one of the battery gauge's 16-bit registers.
 /// @param reg The register.
 /// @param[out] value What it holds.
 /// @return Whether that worked.
@@ -83,7 +83,7 @@ bool readRegister16(uint8_t reg, uint16_t& value) {
 
 /// @brief Reads the battery while switched off.
 ///
-/// The battery monitor runs from the battery and keeps measuring while the
+/// The battery gauge runs from the battery and keeps measuring while the
 /// rest sleeps (see SensorService::readBattery for the units).
 /// @param[out] volts The voltage in V; left as it was if it can't be read.
 /// @param[out] ratePerHour The charge rate in % per hour; the same.

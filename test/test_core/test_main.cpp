@@ -466,7 +466,7 @@ static void test_battery_empty_after_a_minute_low() {
   TEST_ASSERT_FALSE_MESSAGE(idle.empty(), "not discharging");
 }
 
-/// @brief What the battery monitor reads without a battery: the charger, in V
+/// @brief What the battery gauge reads without a battery: the charger, in V
 /// (recorded, 5 s apart).
 static const float kCharger[] = {4.107f, 4.072f, 4.061f, 4.183f, 4.144f, 4.149f, 4.106f, 4.124f,
                                  4.070f, 4.110f, 4.135f, 4.130f, 4.141f, 4.081f, 4.059f, 4.183f,

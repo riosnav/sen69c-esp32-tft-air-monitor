@@ -37,7 +37,7 @@ void begin();
 /// @brief Whether begin() let it start because USB power came back after an
 /// empty battery.
 ///
-/// The battery monitor takes a minute or more to notice; see
+/// The battery gauge takes a minute or more to notice; see
 /// BatteryWatch::pluggedIn().
 bool startedOnUsbPower();
 /// Switches off until D1 or D2 is held; doesn't return.

@@ -76,11 +76,11 @@ void saveBatteryPresent(bool present);
 /// (power::BatteryWatch::emptyPercent()), to start from after a restart.
 ///
 /// Erased with the settings.
-/// @return The battery monitor's reading at "empty", in %; 0 if not learned,
+/// @return The battery gauge's reading at "empty", in %; 0 if not learned,
 ///   NaN if never saved.
 float loadBatteryEmpty();
 /// @brief Saves where "empty" is for the battery, for loadBatteryEmpty().
-/// @param percent The battery monitor's reading at "empty", in %.
+/// @param percent The battery gauge's reading at "empty", in %.
 void saveBatteryEmpty(float percent);
 
 }  // namespace settings

@@ -41,14 +41,14 @@ constexpr uint32_t kSensorStopMs = 2000;
 /// Owned by the main loop; the web server reaches them under AppLock.
 /// @{
 Settings userSettings;                 ///< The user's settings.
-SensorService sensor;                  ///< The SEN69C and the battery monitor, in their own task.
+SensorService sensor;                  ///< The SEN69C and the battery gauge, in their own task.
 SensorSnapshot latest;                 ///< The sensor task's latest readings.
 aq::AirQuality airQuality;             ///< Every metric's level, and the overall one.
 aq::MetricHistory* history = nullptr;  ///< For the trend graphs; see createHistory().
 WifiService wifi;                      ///< Wi-Fi, and the setup hotspot.
 Ota ota;                               ///< Firmware updates over Wi-Fi.
 MqttService mqtt;                      ///< Home Assistant, over MQTT.
-power::BatteryWatch battery;           ///< What the battery monitor's readings mean.
+power::BatteryWatch battery;           ///< What the battery gauge's readings mean.
 Ui ui;                                 ///< The screen, the buttons and the LED.
 /// @}
 
