@@ -230,6 +230,9 @@ class Ui {
   /// Silenced, the screen still switches off when it's set never to dim, after
   /// kSilencedIdleS.
   uint32_t idleAfterS() const;
+  /// @brief Whether the Wi-Fi setup or a firmware update fills the screen,
+  /// hiding the pages and any alert.
+  bool fullScreen() const;
   /// @brief Sets the backlight: full brightness, dimmed, or (idle, if so set or
   /// silenced) the screen switched off.
   ///

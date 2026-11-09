@@ -477,8 +477,8 @@ void Ui::updateAlerts(uint32_t nowMs) {
     dirty_ = true;
   }
   // Left alone, an alert closes by itself, as if dismissed, a minute after
-  // the screen came on to show it.
-  if (alertShowing() && dimmed_) alertShownMs_ = nowMs;
+  // it could be seen: the screen on, and not filled by something else.
+  if (alertShowing() && (dimmed_ || fullScreen())) alertShownMs_ = nowMs;
   if (alertShowing() && nowMs - alertShownMs_ >= kAlertTimeoutMs) dismissAlert();
 }
 
@@ -497,15 +497,16 @@ void Ui::dismissAlert() {
 void Ui::updateBacklight(uint32_t nowMs) {
   // Screens that show something to scan or wait for stay bright, and so does
   // an alert once the screen is on.
-  const bool fullScreen = wifi_->setupActive() || updating(ota_->state());
   const bool alertOnScreen = alertShowing() && !dimmed_;
   const uint32_t idleS = idleAfterS();
-  const bool dim = idleS != 0 && mode_ == Mode::Pages && !fullScreen && !alertOnScreen &&
+  const bool dim = idleS != 0 && mode_ == Mode::Pages && !fullScreen() && !alertOnScreen &&
                    nowMs - lastInputMs_ >= idleS * 1000UL;
   if (dim == dimmed_) return;
   dimmed_ = dim;
   applyBacklight();
 }
+
+bool Ui::fullScreen() const { return wifi_->setupActive() || updating(ota_->state()); }
 
 uint32_t Ui::idleAfterS() const {
   const bool never = settings_->dimAfterS == 0;
