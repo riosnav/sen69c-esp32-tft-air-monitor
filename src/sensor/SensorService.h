@@ -39,7 +39,12 @@ struct SensorSnapshot {
   uint32_t sequence = 0;  ///< Increments with every new measurement, and when they are cleared.
   SensorState state = SensorState::Starting;  ///< What the sensor is doing.
   const char* activity = "";      ///< What the sensor is doing while Busy.
-  uint32_t measuringSinceMs = 0;  ///< millis() when the current measurement started.
+  /// @brief millis() when the current measurement started.
+  ///
+  /// For a measurement kept running across a restart of the ESP32, the
+  /// restart: how long it ran before is unknown, so the 30 s before PM values
+  /// count and the wait before a CO2 calibration start again.
+  uint32_t measuringSinceMs = 0;
   uint32_t deviceStatus = 0;      ///< SEN69C device status register (0 = no errors).
   int16_t lastError = 0;          ///< Last I2C/driver error, 0 if the last command worked.
   char product[32] = "";  ///< The sensor's product name; `""` until it's found.
@@ -51,8 +56,11 @@ struct SensorSnapshot {
   float batteryRate = NAN;  ///< Charge rate, in % per hour, negative while discharging.
   uint32_t batterySequence = 0;  ///< Increments with every battery reading.
   /// @brief Altitude the sensor reported back after it was set, in m; -1 when
-  /// it couldn't be read (it can only be read while the sensor is idle, i.e.
-  /// at start).
+  /// it couldn't be read.
+  ///
+  /// It can only be read while the sensor is idle, i.e. at start. When a
+  /// measurement is kept running across a restart of the ESP32, it's the
+  /// altitude confirmed before, kept with the settings in RTC memory.
   int32_t confirmedAltitudeM = -1;
   char result[48] = "";       ///< Outcome of the last maintenance operation.
   uint32_t resultSequence = 0;  ///< Increments with every new `result`.

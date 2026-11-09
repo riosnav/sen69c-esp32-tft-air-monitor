@@ -347,17 +347,21 @@ bool SensorService::startMeasurement(bool resumeIfRunning) {
   forgetSettings();
   int16_t error = sen_.setSensorAltitude(config_.altitudeM);
   bool confirmed = false;
+  int32_t confirmedAltitude = -1;
   if (error == 0) {
     vTaskDelay(pdMS_TO_TICKS(20));
     uint16_t altitude = 0;
     if (sen_.getSensorAltitude(altitude) == 0) {
       Serial.printf("Sensor altitude set to %u m\n", altitude);
       confirmed = altitude == config_.altitudeM;
-      Lock lock(mutex_);
-      shared_.confirmedAltitudeM = altitude;
+      confirmedAltitude = altitude;
     }
     error = sen_.setCo2SensorAutomaticSelfCalibration(config_.co2SelfCalibration ? 1 : 0);
     vTaskDelay(pdMS_TO_TICKS(20));  // execution time; the driver doesn't wait here
+  }
+  {
+    Lock lock(mutex_);
+    shared_.confirmedAltitudeM = confirmedAltitude;
   }
   if (error == 0 && confirmed) remember(pack(config_.altitudeM, config_.co2SelfCalibration));
   if (error == 0) error = sen_.startContinuousMeasurement();
