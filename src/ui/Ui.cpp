@@ -504,6 +504,9 @@ void Ui::updateBacklight(uint32_t nowMs) {
   const uint32_t idleS = idleAfterS();
   const bool dim = idleS != 0 && mode_ == Mode::Pages && !fullScreen() && !alertOnScreen &&
                    nowMs - lastInputMs_ >= idleS * 1000UL;
+  // Idle, the time since the last input stops growing, so millis() wrapping
+  // after 49.7 days doesn't make it look recent.
+  if (dim) lastInputMs_ = nowMs - idleS * 1000UL;
   if (dim == dimmed_) return;
   dimmed_ = dim;
   applyBacklight();
