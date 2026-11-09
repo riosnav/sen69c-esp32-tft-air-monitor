@@ -171,22 +171,24 @@ void SensorService::snapshot(SensorSnapshot& out) const {
 }
 
 void SensorService::applyConfig(const SensorConfig& config) {
-  send({CommandType::ApplyConfig, config, 0});
+  Lock lock(mutex_);
+  pendingConfig_ = config;
+  configPending_ = true;
 }
 
-void SensorService::cleanFan() { send({CommandType::CleanFan, {}, 0}); }
+void SensorService::cleanFan() { send({CommandType::CleanFan, 0}); }
 
-void SensorService::heatHumiditySensor() { send({CommandType::HeatHumiditySensor, {}, 0}); }
+void SensorService::heatHumiditySensor() { send({CommandType::HeatHumiditySensor, 0}); }
 
 void SensorService::recalibrateCo2(uint16_t referencePpm) {
-  send({CommandType::RecalibrateCo2, {}, referencePpm});
+  send({CommandType::RecalibrateCo2, referencePpm});
 }
 
-void SensorService::resetCo2Calibration() { send({CommandType::ResetCo2Calibration, {}, 0}); }
+void SensorService::resetCo2Calibration() { send({CommandType::ResetCo2Calibration, 0}); }
 
-void SensorService::restartVocLearning() { send({CommandType::RestartVocLearning, {}, 0}); }
+void SensorService::restartVocLearning() { send({CommandType::RestartVocLearning, 0}); }
 
-void SensorService::clearErrors() { send({CommandType::ClearErrors, {}, 0}); }
+void SensorService::clearErrors() { send({CommandType::ClearErrors, 0}); }
 
 void SensorService::restartBatteryGauge() { gaugeRestartRequested_ = true; }
 
@@ -222,6 +224,7 @@ void SensorService::run() {
     while (consecutiveErrors_ < kMaxConsecutiveErrors) {
       Command cmd;
       if (xQueueReceive(queue_, &cmd, pdMS_TO_TICKS(kPollMs)) == pdTRUE) handle(cmd);
+      if (configPending_) applyPendingConfig();
       pollMeasurement();
       serveGauge();
       uint32_t now = millis();
@@ -249,15 +252,32 @@ void SensorService::wait(uint32_t ms) {
 void SensorService::idle(uint32_t ms) {
   for (uint32_t start = millis(), waited = 0; waited < ms; waited = millis() - start) {
     serveGauge();
+    if (configPending_) takePendingConfig();  // for the next start
     Command cmd;
     if (xQueueReceive(queue_, &cmd, pdMS_TO_TICKS(std::min(ms - waited, kPollMs))) == pdTRUE) {
-      if (cmd.type == CommandType::ApplyConfig) {
-        config_ = cmd.config;  // for the next start
-      } else {
-        setResult("Sensor not found");
-      }
+      setResult("Sensor not found");
     }
   }
+}
+
+void SensorService::takePendingConfig() {
+  Lock lock(mutex_);
+  config_ = pendingConfig_;
+  configPending_ = false;
+}
+
+void SensorService::applyPendingConfig() {
+  const SensorConfig old = config_;
+  takePendingConfig();
+  if (config_.tempOffsetC != old.tempOffsetC) applyTemperatureOffset();
+  if (config_.altitudeM == old.altitudeM &&
+      config_.co2SelfCalibration == old.co2SelfCalibration) {
+    return;
+  }
+  setState(SensorState::Busy, "Applying settings");
+  stopMeasurement();
+  // If the sensor didn't come back, make run() look for it again.
+  if (!startMeasurement(false)) consecutiveErrors_ = kMaxConsecutiveErrors;
 }
 
 void SensorService::serveGauge() {
@@ -396,19 +416,6 @@ bool SensorService::runHeater() {
 void SensorService::handle(const Command& cmd) {
   bool restarted = true;
   switch (cmd.type) {
-    case CommandType::ApplyConfig: {
-      SensorConfig old = config_;
-      config_ = cmd.config;
-      if (config_.tempOffsetC != old.tempOffsetC) applyTemperatureOffset();
-      if (config_.altitudeM == old.altitudeM &&
-          config_.co2SelfCalibration == old.co2SelfCalibration) {
-        return;
-      }
-      setState(SensorState::Busy, "Applying settings");
-      stopMeasurement();
-      restarted = startMeasurement(false);
-      break;
-    }
     case CommandType::CleanFan:
       setState(SensorState::Busy, "Cleaning fan");
       stopMeasurement();

@@ -77,12 +77,13 @@ class SensorService {
   /// @param[out] out Where to.
   void snapshot(SensorSnapshot& out) const;
 
-  // All commands are queued and run in the sensor task.
+  // The commands run in the sensor task; none waits for it.
   /// @brief Gives the sensor new settings.
   ///
   /// A new temperature offset applies at once. The sensor takes a new altitude
   /// or CO2 self-calibration setting only while idle, so for those it stops
-  /// measuring and starts again.
+  /// measuring and starts again. Never dropped: if several come before the
+  /// sensor task gets to them, the latest counts.
   /// @param config The settings.
   void applyConfig(const SensorConfig& config);
   /// @brief Cleans the fan: runs it at full speed for 10 s, with the
@@ -130,7 +131,6 @@ class SensorService {
  private:
   /// What a Command asks for: one for each public command.
   enum class CommandType : uint8_t {
-    ApplyConfig,          ///< applyConfig()
     CleanFan,             ///< cleanFan()
     HeatHumiditySensor,   ///< heatHumiditySensor()
     RecalibrateCo2,       ///< recalibrateCo2()
@@ -141,7 +141,6 @@ class SensorService {
   /// A command for the sensor task.
   struct Command {
     CommandType type;  ///< What it asks for.
-    SensorConfig config;  ///< For ApplyConfig.
     uint16_t referencePpm;  ///< For RecalibrateCo2, in ppm.
   };
 
@@ -169,6 +168,11 @@ class SensorService {
   /// @brief Serves restartBatteryGauge() and powerDown(), and reads the
   /// battery monitor every kBatteryIntervalMs.
   void serveGauge();
+  /// Takes the settings from applyConfig() into config_.
+  void takePendingConfig();
+  /// @brief Takes the settings from applyConfig() and gives them to the
+  /// measuring sensor, restarting it if they need that.
+  void applyPendingConfig();
   /// @brief Reads the sensor's product name, serial number and firmware
   /// version into the snapshot.
   /// @return Whether the sensor answered.
@@ -235,7 +239,9 @@ class SensorService {
   std::atomic<bool> powerDownRequested_{false};  ///< powerDown() was called.
   std::atomic<bool> poweredDown_{false};  ///< The sensor task has done powerDown().
 
-  mutable SemaphoreHandle_t mutex_ = nullptr;  ///< Guards shared_.
+  mutable SemaphoreHandle_t mutex_ = nullptr;  ///< Guards shared_ and pendingConfig_.
   QueueHandle_t queue_ = nullptr;  ///< Commands for the sensor task.
   SensorSnapshot shared_;  ///< The latest state, guarded by mutex_.
+  SensorConfig pendingConfig_;  ///< From applyConfig(), guarded by mutex_.
+  std::atomic<bool> configPending_{false};  ///< pendingConfig_ is new.
 };
