@@ -19,7 +19,7 @@ enum class SensorState : uint8_t {
   Starting,   ///< Looking for the sensor.
   Measuring,  ///< Measuring continuously.
   Busy,       ///< Stopped for a maintenance operation; see SensorSnapshot::activity.
-  NotFound,   ///< Not answering; it's looked for again every few seconds.
+  NotFound,   ///< Not answering, or not starting; it's tried again every few seconds.
 };
 
 /// @brief Sensor settings that the firmware must re-apply after every sensor

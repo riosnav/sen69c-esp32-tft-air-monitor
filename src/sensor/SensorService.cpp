@@ -207,6 +207,7 @@ void SensorService::run() {
       idle(kRetryMs);
     }
     if (!startMeasurement(true)) {
+      setState(SensorState::NotFound);
       idle(kRetryMs);
       continue;
     }
